@@ -1,64 +1,40 @@
 #ifndef _queue_h
 #define _queue_h
-#include<stdio.h>
-#include<string.h>
-#include<stdlib.h>
-#include <unistd.h>
-#include "function.h"
+#include <stdio.h>
+#include <stdlib.h>
 
-//physical size of the dataspace
-#define MAXSIZE 479001600
+/* Capacity for global heaps */
+#ifndef MAXSIZE
+#define MAXSIZE 200000
+#endif
+
+/* Tour length used throughout the project */
+#ifndef TOURNUM
 #define TOURNUM 21
+#endif
 
+typedef struct node {
+    int   tour[TOURNUM];
+    float cost;
+} node;
 
+/* Global min-heaps */
+extern node PQ[MAXSIZE + 1];
+extern node store[MAXSIZE + 1];
+extern int theSize;
+extern int storeSize;
 
-struct node
-{
+/* Priority queue API */
+void  insert(float x);
+float deleteMin(void);
+void  percolateUp(void);
+void  percolateDown(int slot);
+void  print(void);
 
-int tour[TOURNUM];
-
-float cost;
-
-};
-
-typedef struct node node;
-
-node PQ[MAXSIZE+1];
-node store[MAXSIZE+1];
-
-//the logical size
-int theSize;
-int storeSize;
-
-//moves items to the top
-void percolateUp();
-
-//delets top of heap
-float deleteMin( );
-
-//prints heap
-void print();
-
-//insertion to the bottom of heap
-void insert(int );
-
-//moves items to bottom
-void percolateDown(int );
-
-//tester program to demonstrate heap
-void tester();
-
-void insertStore();
-void percolateUpStore( );
-void percolateDownStore(int slot);
-float deleteMinStore( );
-
-
-
-
-
-
-
-
+/* Secondary heap for storing elites or results */
+void  insertStore(void);
+void  percolateUpStore(void);
+void  percolateDownStore(int slot);
+float deleteMinStore(void);
 
 #endif

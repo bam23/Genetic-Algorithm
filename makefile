@@ -1,14 +1,24 @@
-tsp : graph.o tester.c function.o queue.o
-	gcc -o tsp graph.o tester.c function.o queue.o
+CC = gcc
+CFLAGS = -Wall -Wextra -O2 -g
+# For debugging, you may temporarily enable:
+# CFLAGS += -fsanitize=address -fno-omit-frame-pointer
 
-queue.o : queue.c queue.h function.h
-	gcc -c -Wall queue.c
+all: tsp
 
-graph.o : graph.c graph.h
-	gcc -c -Wall graph.c
-	
-function.o: function.c function.h graph.h queue.h
-	gcc -c -Wall function.c
+tsp: graph.o function.o queue.o tester.o
+	$(CC) $(CFLAGS) -o tsp graph.o function.o queue.o tester.o
 
-clean : 
-	rm tsp *.o  
+graph.o: graph.c graph.h
+	$(CC) $(CFLAGS) -c graph.c
+
+function.o: function.c function.h queue.h graph.h
+	$(CC) $(CFLAGS) -c function.c -include queue.h
+
+queue.o: queue.c queue.h function.h
+	$(CC) $(CFLAGS) -c queue.c -include queue.h
+
+tester.o: tester.c graph.h function.h
+	$(CC) $(CFLAGS) -c tester.c
+
+clean:
+	rm -f *.o tsp

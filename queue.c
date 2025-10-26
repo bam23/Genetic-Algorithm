@@ -1,232 +1,128 @@
 #include "queue.h"
 
+/* The current tour is provided by function.c */
+extern int s[TOURNUM];
 
-void tester()
-{
-	int x, i, n, R;
+/* Global heaps and sizes */
+int theSize = 0;
+int storeSize = 0;
+node PQ[MAXSIZE + 1];
+node store[MAXSIZE + 1];
 
-	printf("How many #'s are you inputting\n");
+static inline int parent(int i) { return i >> 1; }
+static inline int left(int i)   { return i << 1; }
+static inline int right(int i)  { return (i << 1) | 1; }
 
-	do	
-	{
-		scanf("%d",&n);
-	}while (n>MAXSIZE || n<0);
-
-	for (i=0; i < n; i ++)
-	{	
-		printf("Enter Number\n");
-		scanf("%d", &x);
-		insert(x);
-	}
-
-	print();
-	R=deleteMin( );
-	print();
-	printf("The number %d was removed\n", R);
-
-}
-
-void insert(int x)
-{
-	theSize+=1;
-//inserts at the end of the heap
-	PQ[theSize].cost=x;
- memcpy(PQ[theSize].tour,s,TOURNUM);
-
-//percolatesUP the heap to satisfy condition
-percolateUp( );
-
-}
-
-
-
-//prints the PQ
-void print()
-{
-	printf("PQ contents\n");
-
-	if(theSize!=0)
-	{
-		int i;
-		for(i=1; i <=theSize; i++)
-		{
-			printf("|%.2f",PQ[i].cost);
-		}
-		printf("|\n");
-	}
-	else
-	printf("The PQ is empty\n");
-
-
-}
-
-
-void percolateUp( )
-{	//sets slot to end of heap
-    int slot = theSize;
-
-    //heap condition
-    while(PQ[ slot ].cost < PQ[ slot / 2 ].cost) 
-    { 
-    	//temp swap holder
-    	PQ[0].cost= PQ[ slot / 2 ].cost;
- memcpy(PQ[0].tour, PQ[ slot / 2 ].tour,TOURNUM);
-
-    	//swaps variables
-     	PQ[ slot / 2 ].cost = PQ[ slot ].cost;
- memcpy(PQ[ slot / 2 ].tour,  PQ[ slot ].tour,TOURNUM);
-
-     	PQ[ slot ].cost = PQ[0].cost;
- memcpy(PQ[ slot ].tour,  PQ[0].tour,TOURNUM);
-     	//print();
-
-     		//changes index (next parent up)
-		   slot /= 2;
+/* ---------- Primary heap: PQ ---------- */
+void percolateUp(void) {
+    int i = theSize;
+    while (i > 1 && PQ[i].cost < PQ[parent(i)].cost) {
+        node tmp = PQ[i];
+        PQ[i] = PQ[parent(i)];
+        PQ[parent(i)] = tmp;
+        i = parent(i);
     }
 }
 
-void percolateDown(int slot)
-{
-	int child;
-  	int tmp = PQ[slot].cost;  
-  	int tour[TOURNUM];
-
-  	memcpy(tour,PQ[slot].tour,TOURNUM);
-  	
-
-	while(slot * 2 <= theSize)
-	{
-		child = slot * 2;
-		if( child != theSize && PQ[ child + 1 ].cost < PQ[ child ].cost )
-		{
-			child++;
-					 //printf("check3\n");
-		}
-
-		if( PQ[ child ].cost < tmp )
-		{
-			PQ[slot].cost = PQ[ child ].cost;
-		 memcpy(PQ[slot].tour,  PQ[ child ].tour,TOURNUM);
-			//printf("check4\n");
-		}
-
-		else
-		{	
-			break;
-		}
-
-	slot = child;
-
-	}
-
-         PQ[slot].cost = tmp;
-  memcpy(PQ[slot].tour,tour,TOURNUM);
-  
-}
-
-
-float deleteMin( )
-{
-  float tmp = PQ[ 1 ].cost;
-  	PQ[ 1 ].cost = PQ[ theSize ].cost;
- memcpy(PQ[ 1 ].tour,  PQ[ theSize-- ].tour,TOURNUM);
- // printf("check2\n");
-  
-    percolateDown( 1 );
-    PQ[0].cost=tmp;
-    return tmp;
-}
-
-
-
-
-
-
-//Functions for store Queue
-void insertStore( )
-{
-	storeSize+=1;
-	//inserts at the end of the heap
-	store[storeSize].cost=store[1].cost;
- memcpy(store[storeSize].tour,store[1].tour,TOURNUM);
-
-	//percolatesUP the heap to satisfy condition
-	percolateUpStore( );
-
-}
-
-
-void percolateUpStore( )
-{	//sets slot to end of heap
-    int slot = storeSize;
-
-    //heap condition
-    while(store[ slot ].cost < store[ slot / 2 ].cost) 
-    { 
-    	//temp swap holder
-    	store[0].cost = store[ slot / 2 ].cost;
- memcpy(store[0].tour,  store[ slot / 2 ].tour,TOURNUM);
-
-    	//swaps variables
-     	store[ slot / 2 ].cost = store[ slot ].cost;
- memcpy(store[ slot / 2 ].tour,  store[ slot ].tour,TOURNUM);
-     	store[ slot ].cost = store[0].cost;
- memcpy(store[ slot ].tour,  store[0].tour,TOURNUM);
-     	//print();
-
-     		//changes index (next parent up)
-		   slot /= 2;
+void percolateDown(int i) {
+    while (1) {
+        int l = left(i), r = right(i), smallest = i;
+        if (l <= theSize && PQ[l].cost < PQ[smallest].cost) smallest = l;
+        if (r <= theSize && PQ[r].cost < PQ[smallest].cost) smallest = r;
+        if (smallest == i) break;
+        node tmp = PQ[i];
+        PQ[i] = PQ[smallest];
+        PQ[smallest] = tmp;
+        i = smallest;
     }
 }
 
-void percolateDownStore(int slot)
-{
-	int child;
-  	int tmp = store[slot].cost;  
-
-	while(slot * 2 <= theSize)
-	{
-		child = slot * 2;
-		if( child != theSize && store[ child + 1 ].cost < store[ child ].cost )
-		{
-			child++;
-					 //printf("check3\n");
-		}
-
-		if( store[ child ].cost < tmp )
-		{
-			store[slot].cost = store[ child ].cost;
-		 memcpy(store[slot].tour,  store[ child].tour,TOURNUM);
-			//printf("check4\n");
-		}
-
-		else
-		{	
-			break;
-		}
-
-	slot = child;
-
-	}
-
-  store[slot].cost = tmp;
+void insert(float x) {
+    if (theSize + 1 > MAXSIZE) {
+        fprintf(stderr, "PQ overflow, MAXSIZE=%d\n", MAXSIZE);
+        return;
+    }
+    theSize++;
+    PQ[theSize].cost = x;
+    for (int i = 0; i < TOURNUM; i++) {
+        PQ[theSize].tour[i] = s[i];
+    }
+    percolateUp();
 }
 
-
-float deleteMinStore( )
-{
-  float tmp = store[ 1 ].cost;
-  	store[ 1 ].cost = store[ storeSize ].cost;
- memcpy(store[ 1 ].tour,  store[storeSize--].tour,TOURNUM);
- // printf("check2\n");
-  
-    percolateDownStore( 1 );
-    store[0].cost=tmp;
-    return tmp;
+float deleteMin(void) {
+    if (theSize == 0) {
+        return 0.0f;
+    }
+    float minCost = PQ[1].cost;
+    /* Expose the best tour to callers via global s */
+    for (int i = 0; i < TOURNUM; i++) {
+        s[i] = PQ[1].tour[i];
+    }
+    PQ[1] = PQ[theSize];
+    theSize--;
+    if (theSize > 0) percolateDown(1);
+    return minCost;
 }
 
+void print(void) {
+    for (int i = 1; i <= theSize; i++) {
+        printf("[%d] cost=%0.3f tour:", i, PQ[i].cost);
+        for (int j = 0; j < TOURNUM; j++) printf(" %d", PQ[i].tour[j]);
+        printf("\n");
+    }
+}
 
+/* ---------- Secondary heap: store ---------- */
+static inline void percolateUpStoreInternal(void) {
+    int i = storeSize;
+    while (i > 1 && store[i].cost < store[parent(i)].cost) {
+        node tmp = store[i];
+        store[i] = store[parent(i)];
+        store[parent(i)] = tmp;
+        i = parent(i);
+    }
+}
 
+void percolateUpStore(void) { percolateUpStoreInternal(); }
 
+void percolateDownStore(int i) {
+    while (1) {
+        int l = left(i), r = right(i), smallest = i;
+        if (l <= storeSize && store[l].cost < store[smallest].cost) smallest = l;
+        if (r <= storeSize && store[r].cost < store[smallest].cost) smallest = r;
+        if (smallest == i) break;
+        node tmp = store[i];
+        store[i] = store[smallest];
+        store[smallest] = tmp;
+        i = smallest;
+    }
+}
 
+void insertStore(void) {
+    if (storeSize + 1 > MAXSIZE) {
+        fprintf(stderr, "store overflow, MAXSIZE=%d\n", MAXSIZE);
+        return;
+    }
+    storeSize++;
+    /* copy the current best from PQ root */
+    if (theSize >= 1) {
+        store[storeSize] = PQ[1];
+    } else {
+        /* if PQ is empty, copy from s with cost 0 */
+        store[storeSize].cost = 0.0f;
+        for (int i = 0; i < TOURNUM; i++) store[storeSize].tour[i] = s[i];
+    }
+    percolateUpStoreInternal();
+}
 
+float deleteMinStore(void) {
+    if (storeSize == 0) {
+        return 0.0f;
+    }
+    float minCost = store[1].cost;
+    store[1] = store[storeSize];
+    storeSize--;
+    if (storeSize > 0) percolateDownStore(1);
+    return minCost;
+}
