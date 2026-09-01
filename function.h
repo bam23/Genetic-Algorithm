@@ -1,28 +1,55 @@
-#ifndef _FUNCTION_H_
-#define _FUNCTION_H_
-#include <sys/time.h>
-#include <time.h>
-#include <unistd.h>
+#ifndef FUNCTION_H
+#define FUNCTION_H
+
+#include <stdbool.h>
+#include <stdint.h>
+
 #include "graph.h"
 #include "queue.h"
 
-//restriction case. If over this number you might as well as did brute force
-#define maxperm 12
-#define maxtour 20
-#define TOURNUM 21
-#define max
+/* Exhaustive search is intentionally limited to small coursework examples. */
+#define MAX_EXACT_CITIES 12
 
-int s[TOURNUM];
+typedef struct random_state {
+    uint32_t value;
+} random_state;
 
-void printS(double cities[MAXNUM][MAXNUM]);
-void swap(int , int );
-void permute(int nfact, double cities[MAXNUM][MAXNUM]);
-void brute(double cities[MAXNUM][MAXNUM]);
-void genetic(double cities[MAXNUM][MAXNUM]);
-int factorial(int);
-double cost(double cities[MAXNUM][MAXNUM] );
-void mutate();
+typedef struct search_result {
+    int tour[MAXNUM];
+    int city_count;
+    double cost;
+    uint64_t evaluated_tours;
+} search_result;
 
+typedef struct evolution_config {
+    int population_size;
+    int generations;
+    int elite_count;
+    int mutation_swaps;
+    uint32_t seed;
+    bool verbose;
+} evolution_config;
+
+double tour_cost(const double cities[MAXNUM][MAXNUM],
+                 const int tour[MAXNUM],
+                 int city_count);
+bool tour_is_valid(const int tour[MAXNUM], int city_count);
+bool factorial_checked(int number, uint64_t *result);
+bool next_permutation(int tour[MAXNUM], int city_count);
+
+void random_state_init(random_state *state, uint32_t seed);
+void mutate_tour(int tour[MAXNUM],
+                 int city_count,
+                 int swap_count,
+                 random_state *state);
+
+bool exhaustive_search(const double cities[MAXNUM][MAXNUM],
+                       int city_count,
+                       bool verbose,
+                       search_result *result);
+bool evolutionary_search(const double cities[MAXNUM][MAXNUM],
+                         int city_count,
+                         const evolution_config *config,
+                         search_result *result);
 
 #endif
-

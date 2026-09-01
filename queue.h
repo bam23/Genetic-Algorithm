@@ -1,40 +1,35 @@
-#ifndef _queue_h
-#define _queue_h
-#include <stdio.h>
-#include <stdlib.h>
+#ifndef QUEUE_H
+#define QUEUE_H
 
-/* Capacity for global heaps */
-#ifndef MAXSIZE
-#define MAXSIZE 200000
-#endif
+#include <stdbool.h>
+#include <stddef.h>
 
-/* Tour length used throughout the project */
-#ifndef TOURNUM
-#define TOURNUM 21
-#endif
+#include "graph.h"
+
+/* Preserve the coursework's deliberately small population limit. */
+#define MAX_POPULATION 12
 
 typedef struct node {
-    int   tour[TOURNUM];
-    float cost;
+    int tour[MAXNUM];
+    int city_count;
+    double cost;
 } node;
 
-/* Global min-heaps */
-extern node PQ[MAXSIZE + 1];
-extern node store[MAXSIZE + 1];
-extern int theSize;
-extern int storeSize;
+/*
+ * One-based, array-backed binary min-heap. The representation and
+ * percolation operations are the same data-structures concepts used in the
+ * original project, but the state now belongs to a heap instance instead of
+ * global arrays.
+ */
+typedef struct min_heap {
+    node items[MAX_POPULATION + 1];
+    size_t size;
+    size_t capacity;
+} min_heap;
 
-/* Priority queue API */
-void  insert(float x);
-float deleteMin(void);
-void  percolateUp(void);
-void  percolateDown(int slot);
-void  print(void);
-
-/* Secondary heap for storing elites or results */
-void  insertStore(void);
-void  percolateUpStore(void);
-void  percolateDownStore(int slot);
-float deleteMinStore(void);
+void heap_init(min_heap *heap, size_t capacity);
+bool heap_insert(min_heap *heap, const node *candidate);
+bool heap_delete_min(min_heap *heap, node *minimum);
+const node *heap_peek_min(const min_heap *heap);
 
 #endif

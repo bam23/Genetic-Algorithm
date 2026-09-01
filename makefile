@@ -1,24 +1,33 @@
-CC = gcc
-CFLAGS = -Wall -Wextra -O2 -g
-# For debugging, you may temporarily enable:
-# CFLAGS += -fsanitize=address -fno-omit-frame-pointer
+CC ?= cc
+CFLAGS ?= -O2 -g
+WARNINGS = -std=c11 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
+	-Wstrict-prototypes -Werror
+LDLIBS = -lm
 
-all: tsp
+PROGRAM = tsp
+COMMON_OBJECTS = graph.o function.o queue.o
 
-tsp: graph.o function.o queue.o tester.o
-	$(CC) $(CFLAGS) -o tsp graph.o function.o queue.o tester.o
+.PHONY: all run clean
+
+all: $(PROGRAM)
+
+$(PROGRAM): $(COMMON_OBJECTS) main.o
+	$(CC) $(CFLAGS) $(WARNINGS) -o $@ $^ $(LDLIBS)
 
 graph.o: graph.c graph.h
-	$(CC) $(CFLAGS) -c graph.c
+	$(CC) $(CFLAGS) $(WARNINGS) -c graph.c
 
-function.o: function.c function.h queue.h graph.h
-	$(CC) $(CFLAGS) -c function.c -include queue.h
+function.o: function.c function.h graph.h queue.h
+	$(CC) $(CFLAGS) $(WARNINGS) -c function.c
 
-queue.o: queue.c queue.h function.h
-	$(CC) $(CFLAGS) -c queue.c -include queue.h
+queue.o: queue.c queue.h graph.h
+	$(CC) $(CFLAGS) $(WARNINGS) -c queue.c
 
-tester.o: tester.c graph.h function.h
-	$(CC) $(CFLAGS) -c tester.c
+main.o: main.c function.h graph.h queue.h
+	$(CC) $(CFLAGS) $(WARNINGS) -c main.c
+
+run: $(PROGRAM)
+	./$(PROGRAM)
 
 clean:
-	rm -f *.o tsp
+	rm -f *.o $(PROGRAM)

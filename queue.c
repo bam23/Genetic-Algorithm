@@ -1,128 +1,122 @@
 #include "queue.h"
 
-/* The current tour is provided by function.c */
-extern int s[TOURNUM];
+static size_t parent(size_t index)
+{
+    return index / 2U;
+}
 
-/* Global heaps and sizes */
-int theSize = 0;
-int storeSize = 0;
-node PQ[MAXSIZE + 1];
-node store[MAXSIZE + 1];
+static size_t left(size_t index)
+{
+    return index * 2U;
+}
 
-static inline int parent(int i) { return i >> 1; }
-static inline int left(int i)   { return i << 1; }
-static inline int right(int i)  { return (i << 1) | 1; }
+static size_t right(size_t index)
+{
+    return (index * 2U) + 1U;
+}
 
-/* ---------- Primary heap: PQ ---------- */
-void percolateUp(void) {
-    int i = theSize;
-    while (i > 1 && PQ[i].cost < PQ[parent(i)].cost) {
-        node tmp = PQ[i];
-        PQ[i] = PQ[parent(i)];
-        PQ[parent(i)] = tmp;
-        i = parent(i);
+static bool node_is_less(const node *left_node, const node *right_node)
+{
+    if (left_node->cost < right_node->cost) {
+        return true;
+    }
+    if (left_node->cost > right_node->cost) {
+        return false;
+    }
+
+    /* A deterministic tie-breaker makes fixed-seed runs reproducible. */
+    const int count = left_node->city_count < right_node->city_count
+        ? left_node->city_count
+        : right_node->city_count;
+    for (int i = 0; i < count; ++i) {
+        if (left_node->tour[i] < right_node->tour[i]) {
+            return true;
+        }
+        if (left_node->tour[i] > right_node->tour[i]) {
+            return false;
+        }
+    }
+    return left_node->city_count < right_node->city_count;
+}
+
+static void percolate_up(min_heap *heap, size_t index)
+{
+    while (index > 1U &&
+           node_is_less(&heap->items[index], &heap->items[parent(index)])) {
+        const node temporary = heap->items[index];
+        heap->items[index] = heap->items[parent(index)];
+        heap->items[parent(index)] = temporary;
+        index = parent(index);
     }
 }
 
-void percolateDown(int i) {
-    while (1) {
-        int l = left(i), r = right(i), smallest = i;
-        if (l <= theSize && PQ[l].cost < PQ[smallest].cost) smallest = l;
-        if (r <= theSize && PQ[r].cost < PQ[smallest].cost) smallest = r;
-        if (smallest == i) break;
-        node tmp = PQ[i];
-        PQ[i] = PQ[smallest];
-        PQ[smallest] = tmp;
-        i = smallest;
+static void percolate_down(min_heap *heap, size_t index)
+{
+    while (true) {
+        const size_t left_child = left(index);
+        const size_t right_child = right(index);
+        size_t smallest = index;
+
+        if (left_child <= heap->size &&
+            node_is_less(&heap->items[left_child], &heap->items[smallest])) {
+            smallest = left_child;
+        }
+        if (right_child <= heap->size &&
+            node_is_less(&heap->items[right_child], &heap->items[smallest])) {
+            smallest = right_child;
+        }
+        if (smallest == index) {
+            break;
+        }
+
+        const node temporary = heap->items[index];
+        heap->items[index] = heap->items[smallest];
+        heap->items[smallest] = temporary;
+        index = smallest;
     }
 }
 
-void insert(float x) {
-    if (theSize + 1 > MAXSIZE) {
-        fprintf(stderr, "PQ overflow, MAXSIZE=%d\n", MAXSIZE);
+void heap_init(min_heap *heap, size_t capacity)
+{
+    if (heap == NULL) {
         return;
     }
-    theSize++;
-    PQ[theSize].cost = x;
-    for (int i = 0; i < TOURNUM; i++) {
-        PQ[theSize].tour[i] = s[i];
-    }
-    percolateUp();
+
+    heap->size = 0U;
+    heap->capacity = capacity <= MAX_POPULATION ? capacity : MAX_POPULATION;
 }
 
-float deleteMin(void) {
-    if (theSize == 0) {
-        return 0.0f;
+bool heap_insert(min_heap *heap, const node *candidate)
+{
+    if (heap == NULL || candidate == NULL || heap->size >= heap->capacity) {
+        return false;
     }
-    float minCost = PQ[1].cost;
-    /* Expose the best tour to callers via global s */
-    for (int i = 0; i < TOURNUM; i++) {
-        s[i] = PQ[1].tour[i];
-    }
-    PQ[1] = PQ[theSize];
-    theSize--;
-    if (theSize > 0) percolateDown(1);
-    return minCost;
+
+    ++heap->size;
+    heap->items[heap->size] = *candidate;
+    percolate_up(heap, heap->size);
+    return true;
 }
 
-void print(void) {
-    for (int i = 1; i <= theSize; i++) {
-        printf("[%d] cost=%0.3f tour:", i, PQ[i].cost);
-        for (int j = 0; j < TOURNUM; j++) printf(" %d", PQ[i].tour[j]);
-        printf("\n");
+bool heap_delete_min(min_heap *heap, node *minimum)
+{
+    if (heap == NULL || minimum == NULL || heap->size == 0U) {
+        return false;
     }
+
+    *minimum = heap->items[1];
+    heap->items[1] = heap->items[heap->size];
+    --heap->size;
+    if (heap->size > 0U) {
+        percolate_down(heap, 1U);
+    }
+    return true;
 }
 
-/* ---------- Secondary heap: store ---------- */
-static inline void percolateUpStoreInternal(void) {
-    int i = storeSize;
-    while (i > 1 && store[i].cost < store[parent(i)].cost) {
-        node tmp = store[i];
-        store[i] = store[parent(i)];
-        store[parent(i)] = tmp;
-        i = parent(i);
+const node *heap_peek_min(const min_heap *heap)
+{
+    if (heap == NULL || heap->size == 0U) {
+        return NULL;
     }
-}
-
-void percolateUpStore(void) { percolateUpStoreInternal(); }
-
-void percolateDownStore(int i) {
-    while (1) {
-        int l = left(i), r = right(i), smallest = i;
-        if (l <= storeSize && store[l].cost < store[smallest].cost) smallest = l;
-        if (r <= storeSize && store[r].cost < store[smallest].cost) smallest = r;
-        if (smallest == i) break;
-        node tmp = store[i];
-        store[i] = store[smallest];
-        store[smallest] = tmp;
-        i = smallest;
-    }
-}
-
-void insertStore(void) {
-    if (storeSize + 1 > MAXSIZE) {
-        fprintf(stderr, "store overflow, MAXSIZE=%d\n", MAXSIZE);
-        return;
-    }
-    storeSize++;
-    /* copy the current best from PQ root */
-    if (theSize >= 1) {
-        store[storeSize] = PQ[1];
-    } else {
-        /* if PQ is empty, copy from s with cost 0 */
-        store[storeSize].cost = 0.0f;
-        for (int i = 0; i < TOURNUM; i++) store[storeSize].tour[i] = s[i];
-    }
-    percolateUpStoreInternal();
-}
-
-float deleteMinStore(void) {
-    if (storeSize == 0) {
-        return 0.0f;
-    }
-    float minCost = store[1].cost;
-    store[1] = store[storeSize];
-    storeSize--;
-    if (storeSize > 0) percolateDownStore(1);
-    return minCost;
+    return &heap->items[1];
 }

@@ -1,51 +1,56 @@
 #include "graph.h"
 
-/* New functions required by the tester */
-void iGraph(double cities[MAXNUM][MAXNUM]) {
-    FILE *fptr = fopen("cities.dat", "r");
-    if (fptr == NULL) {
-        fprintf(stderr, "Error: could not open cities.dat\n");
-        exit(1);
+#include <stdio.h>
+
+bool graph_load(const char *path, double cities[MAXNUM][MAXNUM])
+{
+    if (path == NULL || cities == NULL) {
+        return false;
     }
-    for (int i = 0; i < MAXNUM; i++) {
-        for (int j = 0; j < MAXNUM; j++) {
-            if (i == j) {
-                cities[i][j] = 0.0;
-            } else if (fscanf(fptr, "%lf", &cities[i][j]) != 1) {
-                fprintf(stderr, "Error: malformed cities.dat at (%d,%d)\n", i, j);
-                fclose(fptr);
-                exit(1);
+
+    FILE *file = fopen(path, "r");
+    if (file == NULL) {
+        fprintf(stderr, "Error: could not open %s\n", path);
+        return false;
+    }
+
+    for (int row = 0; row < MAXNUM; ++row) {
+        for (int column = 0; column < MAXNUM; ++column) {
+            if (row == column) {
+                cities[row][column] = 0.0;
+            } else if (fscanf(file, "%lf", &cities[row][column]) != 1) {
+                fprintf(stderr,
+                        "Error: malformed %s at matrix position (%d,%d)\n",
+                        path,
+                        row,
+                        column);
+                fclose(file);
+                return false;
             }
         }
     }
-    fclose(fptr);
+
+    double extra_value = 0.0;
+    if (fscanf(file, "%lf", &extra_value) == 1) {
+        fprintf(stderr, "Error: %s contains more than 380 distance values\n", path);
+        fclose(file);
+        return false;
+    }
+
+    fclose(file);
+    return true;
 }
 
-void pGraph(double cities[MAXNUM][MAXNUM]) {
-    for (int i = 0; i < MAXNUM; i++) {
-        for (int j = 0; j < MAXNUM; j++) {
-            printf("%8.2f ", cities[i][j]);
-        }
-        printf("\n");
+void graph_print(const double cities[MAXNUM][MAXNUM], int city_count)
+{
+    if (cities == NULL || city_count < 1 || city_count > MAXNUM) {
+        return;
     }
-}
 
-/* Original helper kept for compatibility */
-void test(double cities[MAXNUM][MAXNUM]) {
-    FILE *fptr = fopen("cities.dat", "r");
-    if (fptr == NULL) {
-        fprintf(stderr, "Error: could not open cities.dat\n");
-        exit(1);
-    }
-    for (int i = 0; i < MAXNUM; i++) {
-        for (int j = 0; j < MAXNUM; j++) {
-            if (i == j) cities[i][j] = 0.0;
-            else if (fscanf(fptr, "%lf", &cities[i][j]) != 1) {
-                fprintf(stderr, "Error: malformed cities.dat at (%d,%d)\n", i, j);
-                fclose(fptr);
-                exit(1);
-            }
+    for (int row = 0; row < city_count; ++row) {
+        for (int column = 0; column < city_count; ++column) {
+            printf("%8.2f ", cities[row][column]);
         }
+        putchar('\n');
     }
-    fclose(fptr);
 }

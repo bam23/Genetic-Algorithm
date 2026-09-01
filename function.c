@@ -1,242 +1,349 @@
 #include "function.h"
-#include "graph.h"
-#include "queue.h"
-#include <string.h>
-#include <sys/time.h>
-#include <stdlib.h>
+
+#include <float.h>
+#include <inttypes.h>
 #include <stdio.h>
-#include <time.h>
+#include <string.h>
 
-double optimal = 999999999999.0;
-int flag = 0;
-int NUMCITIES = 0;
+static uint32_t random_next(random_state *state)
+{
+    /* Defined-width arithmetic makes fixed seeds portable and repeatable. */
+    state->value = (state->value * UINT32_C(1664525)) + UINT32_C(1013904223);
+    return state->value;
+}
 
-/* s[] is declared in headers. It represents the current tour. */
+static int random_bounded(random_state *state, int upper_bound)
+{
+    if (state == NULL || upper_bound <= 0) {
+        return 0;
+    }
+    return (int)(random_next(state) % (uint32_t)upper_bound);
+}
 
-static void shuffle_current_tour(void) {
-    for (int i = NUMCITIES - 1; i > 0; --i) {
-        int j = rand() % (i + 1);
-        int tmp = s[i];
-        s[i] = s[j];
-        s[j] = tmp;
+static void swap_positions(int tour[MAXNUM], int first, int second)
+{
+    const int temporary = tour[first];
+    tour[first] = tour[second];
+    tour[second] = temporary;
+}
+
+static void initialize_identity_tour(int tour[MAXNUM], int city_count)
+{
+    for (int i = 0; i < city_count; ++i) {
+        tour[i] = i;
+    }
+    for (int i = city_count; i < MAXNUM; ++i) {
+        tour[i] = 0;
     }
 }
 
-void printS(double cities[MAXNUM][MAXNUM])
+static void shuffle_tour_tail(int tour[MAXNUM],
+                              int city_count,
+                              random_state *state)
 {
-    int x;
-    double c;
-    for (x = 0; x < NUMCITIES; x++) {
-        printf("|%d|", s[x]);
+    /* Keep city 0 anchored; rotating a closed tour does not create a new tour. */
+    for (int i = city_count - 1; i > 1; --i) {
+        const int other = 1 + random_bounded(state, i);
+        swap_positions(tour, i, other);
     }
-    printf("|%d|", s[0]);
-    printf("\n");
+}
 
-    c = cost(cities);
-
-    if (flag == 1) {
-        insert((float)c);
+static void print_tour(const int tour[MAXNUM], int city_count)
+{
+    for (int i = 0; i < city_count; ++i) {
+        printf("%d -> ", tour[i]);
     }
-    printf("Cost equals %lf\n", c);
+    printf("%d", tour[0]);
 }
 
-void swap(int a, int b)
+static void initialize_result(search_result *result, int city_count)
 {
-    int temp;
-    temp = s[a];
-    s[a] = s[b];
-    s[b] = temp;
+    memset(result, 0, sizeof(*result));
+    result->city_count = city_count;
+    result->cost = DBL_MAX;
 }
 
-void reset()
+static void consider_candidate(search_result *result, const node *candidate)
 {
-    /* heap contents do not matter if we reset sizes */
-    theSize = 0;
+    if (candidate->cost < result->cost) {
+        result->cost = candidate->cost;
+        result->city_count = candidate->city_count;
+        memcpy(result->tour,
+               candidate->tour,
+               (size_t)candidate->city_count * sizeof(candidate->tour[0]));
+    }
 }
 
-void resetS()
+static node make_candidate(const double cities[MAXNUM][MAXNUM],
+                           const int tour[MAXNUM],
+                           int city_count)
 {
-    storeSize = 0;
+    node candidate = { .tour = { 0 }, .city_count = city_count, .cost = 0.0 };
+    memcpy(candidate.tour,
+           tour,
+           (size_t)city_count * sizeof(candidate.tour[0]));
+    candidate.cost = tour_cost(cities, candidate.tour, city_count);
+    return candidate;
 }
 
-void permute(int nfact, double cities[MAXNUM][MAXNUM])
+double tour_cost(const double cities[MAXNUM][MAXNUM],
+                 const int tour[MAXNUM],
+                 int city_count)
 {
-    int m, k, p, q, i;
-    for (i = 1; i < nfact; i++) {
-        m = NUMCITIES - 2;
-        while (m > 0 && s[m] > s[m + 1]) {
-            m = m - 1;
+    if (cities == NULL || tour == NULL ||
+        city_count < 2 || city_count > MAXNUM ||
+        !tour_is_valid(tour, city_count)) {
+        return DBL_MAX;
+    }
+
+    double total = 0.0;
+    for (int i = 0; i < city_count; ++i) {
+        const int next = (i + 1) % city_count;
+        total += cities[tour[i]][tour[next]];
+    }
+    return total;
+}
+
+bool tour_is_valid(const int tour[MAXNUM], int city_count)
+{
+    if (tour == NULL || city_count < 2 || city_count > MAXNUM) {
+        return false;
+    }
+
+    bool seen[MAXNUM] = { false };
+    for (int i = 0; i < city_count; ++i) {
+        const int city = tour[i];
+        if (city < 0 || city >= city_count || seen[city]) {
+            return false;
+        }
+        seen[city] = true;
+    }
+    return true;
+}
+
+static bool factorial_recursive_checked(int number, uint64_t *result)
+{
+    if (number <= 1) {
+        *result = UINT64_C(1);
+        return true;
+    }
+
+    uint64_t previous = 0U;
+    if (!factorial_recursive_checked(number - 1, &previous)) {
+        return false;
+    }
+
+    const uint64_t unsigned_number = (uint64_t)number;
+    if (previous > UINT64_MAX / unsigned_number) {
+        return false;
+    }
+    *result = previous * unsigned_number;
+    return true;
+}
+
+bool factorial_checked(int number, uint64_t *result)
+{
+    if (result == NULL || number < 0) {
+        return false;
+    }
+
+    /* Retain the original recursive factorial exercise, with overflow checks. */
+    return factorial_recursive_checked(number, result);
+}
+
+bool next_permutation(int tour[MAXNUM], int city_count)
+{
+    if (tour == NULL || city_count < 2 || city_count > MAXNUM) {
+        return false;
+    }
+
+    /* This is the original lexicographic algorithm, restricted to indices
+       1..city_count-1 so city 0 remains the anchor. */
+    int pivot = city_count - 2;
+    while (pivot >= 1 && tour[pivot] >= tour[pivot + 1]) {
+        --pivot;
+    }
+    if (pivot < 1) {
+        return false;
+    }
+
+    int successor = city_count - 1;
+    while (tour[pivot] >= tour[successor]) {
+        --successor;
+    }
+    swap_positions(tour, pivot, successor);
+
+    int left_index = pivot + 1;
+    int right_index = city_count - 1;
+    while (left_index < right_index) {
+        swap_positions(tour, left_index, right_index);
+        ++left_index;
+        --right_index;
+    }
+    return true;
+}
+
+void random_state_init(random_state *state, uint32_t seed)
+{
+    if (state != NULL) {
+        state->value = seed;
+    }
+}
+
+void mutate_tour(int tour[MAXNUM],
+                 int city_count,
+                 int swap_count,
+                 random_state *state)
+{
+    if (tour == NULL || state == NULL || city_count < 3 ||
+        city_count > MAXNUM || swap_count < 1) {
+        return;
+    }
+
+    for (int mutation = 0; mutation < swap_count; ++mutation) {
+        const int first = 1 + random_bounded(state, city_count - 1);
+        int second = 1 + random_bounded(state, city_count - 1);
+        while (second == first) {
+            second = 1 + random_bounded(state, city_count - 1);
+        }
+        swap_positions(tour, first, second);
+    }
+}
+
+bool exhaustive_search(const double cities[MAXNUM][MAXNUM],
+                       int city_count,
+                       bool verbose,
+                       search_result *result)
+{
+    if (cities == NULL || result == NULL ||
+        city_count < 2 || city_count > MAX_EXACT_CITIES) {
+        return false;
+    }
+
+    uint64_t permutation_count = 0U;
+    if (!factorial_checked(city_count - 1, &permutation_count)) {
+        return false;
+    }
+
+    initialize_result(result, city_count);
+    int tour[MAXNUM] = { 0 };
+    initialize_identity_tour(tour, city_count);
+
+    for (uint64_t index = 0U; index < permutation_count; ++index) {
+        const node candidate = make_candidate(cities, tour, city_count);
+        consider_candidate(result, &candidate);
+        ++result->evaluated_tours;
+
+        if (verbose) {
+            printf("Exact candidate %" PRIu64 ": ", index + UINT64_C(1));
+            print_tour(candidate.tour, city_count);
+            printf("  cost=%.6f\n", candidate.cost);
         }
 
-        k = NUMCITIES - 1;
-        while (s[m] > s[k]) {
-            k = k - 1;
+        if (index + UINT64_C(1) < permutation_count &&
+            !next_permutation(tour, city_count)) {
+            return false;
         }
-        swap(m, k);
-
-        p = m + 1;
-        q = NUMCITIES - 1;
-
-        while (p < q) {
-            swap(p, q);
-            p++;
-            q--;
-        }
-        printS(cities);
     }
+    return true;
 }
 
-int factorial(int n)
+bool evolutionary_search(const double cities[MAXNUM][MAXNUM],
+                         int city_count,
+                         const evolution_config *config,
+                         search_result *result)
 {
-    if (n <= 1) return 1;
-    return n * factorial(n - 1);
-}
-
-double cost(double cities[MAXNUM][MAXNUM])
-{
-    double sum = 0.0;
-    for (int i = 0; i < NUMCITIES; i++) {
-        int j = (i + 1) % NUMCITIES;
-        sum += cities[s[i]][s[j]];
-    }
-    if (sum < optimal) {
-        optimal = sum;
-    }
-    return sum;
-}
-
-/* mutate top of PQ by swapping two random nonzero indices */
-void mutate(void)
-{
-    if (NUMCITIES <= 2 || theSize == 0) return;
-    int i = 1 + rand() % (NUMCITIES - 1);
-    int j = 1 + rand() % (NUMCITIES - 1);
-    if (i == j) j = (j % (NUMCITIES - 1)) + 1;
-    int temp = PQ[1].tour[i];
-    PQ[1].tour[i] = PQ[1].tour[j];
-    PQ[1].tour[j] = temp;
-}
-
-void brute(double cities[MAXNUM][MAXNUM])
-{
-    int i;
-    int nfact;
-    printf("Brute Force\n");
-    printf("Please enter the number of cities to permute\n");
-    scanf("%d", &i);
-
-    nfact = factorial(i - 1);
-    NUMCITIES = i;
-
-    struct timeval t;
-    int timeb;
-    int timea;
-
-    gettimeofday(&t, NULL);
-    timeb = t.tv_sec;
-
-    for (int x = 0; x < NUMCITIES; x++) {
-        s[x] = x;
-    }
-    printS(cities);
-    permute(nfact, cities);
-
-    gettimeofday(&t, NULL);
-    timea = t.tv_sec;
-
-    printf("Optimal cost %lf\n", optimal);
-    printf("It took %d Secounds\n", timea - timeb);
-}
-
-void genetic(double cities[MAXNUM][MAXNUM])
-{
-    static int seeded = 0;
-    if (!seeded) { srand((unsigned)time(NULL)); seeded = 1; }
-
-    int gnum, pop, mut, city, count;
-    int elitePercent;
-    count = 0;
-
-    optimal = 1e300;
-
-    printf("\n\nGenetic\n");
-    printf("How many generation to run?\n");
-    scanf("%d", &gnum);
-
-    printf("Population size? (0-12)\n");
-    scanf("%d", &pop);
-    while (pop > 12) {
-        printf("Please select a number (0-12)\n");
-        scanf("%d", &pop);
+    if (cities == NULL || config == NULL || result == NULL ||
+        city_count < 3 || city_count > MAXNUM ||
+        config->population_size < 2 ||
+        config->population_size > MAX_POPULATION ||
+        config->generations < 0 ||
+        config->elite_count < 1 ||
+        config->elite_count > config->population_size ||
+        config->mutation_swaps < 1 ||
+        config->mutation_swaps >= city_count) {
+        return false;
     }
 
-    printf("How many cities are you visiting (0-19)\n");
-    scanf("%d", &city);
-    while (city > 19 || city < 0) {
-        printf("Please re-enter (0-19) cities \n");
-        scanf("%d", &city);
+    initialize_result(result, city_count);
+    random_state random;
+    random_state_init(&random, config->seed);
+
+    min_heap current_population;
+    heap_init(&current_population, (size_t)config->population_size);
+
+    for (int member = 0; member < config->population_size; ++member) {
+        int tour[MAXNUM] = { 0 };
+        initialize_identity_tour(tour, city_count);
+        shuffle_tour_tail(tour, city_count, &random);
+
+        const node candidate = make_candidate(cities, tour, city_count);
+        if (!heap_insert(&current_population, &candidate)) {
+            return false;
+        }
+        consider_candidate(result, &candidate);
+        ++result->evaluated_tours;
     }
-    NUMCITIES = city;
 
-    printf("Percentage of population to be kept as elites?\n");
-    scanf("%d", &elitePercent);
-    int elite = (int)(pop * (elitePercent / 100.0));
-    if (elite < 1) elite = 1;
-    if (elite > pop) elite = pop;
-
-    printf("How many cities to swap on mutations?\n");
-    scanf("%d", &mut);
-    if (mut < 1) mut = 1;
-
-    struct timeval t;
-    int timeb;
-    int timea;
-
-    gettimeofday(&t, NULL);
-    timeb = t.tv_sec;
-
-    for (int x = 0; x < city; x++) {
-        s[x] = x;
+    if (config->verbose) {
+        const node *initial_best = heap_peek_min(&current_population);
+        printf("Generation 0 best: %.6f\n", initial_best->cost);
     }
-    shuffle_current_tour();
 
-    printf("Generation %d\n", ++count);
-    flag = 1;
-    printS(cities);
-    permute(pop, cities);
-
-    int track = 0;
-    int rem = pop - (mut + elite);
-    for (int gen = 0; gen < gnum; gen++) {
-        for (track = 0; track < elite; track++) {
-            insertStore();
-            deleteMin();
+    for (int generation = 1; generation <= config->generations; ++generation) {
+        node ranked[MAX_POPULATION];
+        for (int member = 0; member < config->population_size; ++member) {
+            if (!heap_delete_min(&current_population, &ranked[member])) {
+                return false;
+            }
         }
 
-        for (track = 0; track < mut; track++) {
-            mutate();
-            insertStore();
-            deleteMin();
+        min_heap next_population;
+        heap_init(&next_population, (size_t)config->population_size);
+
+        /* Elites retain both their route and the cost already calculated for it. */
+        for (int elite = 0; elite < config->elite_count; ++elite) {
+            if (!heap_insert(&next_population, &ranked[elite])) {
+                return false;
+            }
         }
 
-        reset();
-
-        for (int i = 1; i <= storeSize; i++) {
-            memcpy(s, store[i].tour, TOURNUM * sizeof(int));
-            insert(store[i].cost);
+        int parent_pool = config->population_size / 2;
+        if (parent_pool < config->elite_count) {
+            parent_pool = config->elite_count;
         }
 
-        resetS();
-        printf("Generation %d\n", ++count);
-        if ((mut + elite) < pop) {
-            permute(rem, cities);
+        for (int member = config->elite_count;
+             member < config->population_size;
+             ++member) {
+            const int parent_index = random_bounded(&random, parent_pool);
+            node child = ranked[parent_index];
+
+            mutate_tour(child.tour,
+                        city_count,
+                        config->mutation_swaps,
+                        &random);
+            /* Mutation changes the route, so its old fitness is discarded. */
+            child.cost = tour_cost(cities, child.tour, city_count);
+
+            if (!tour_is_valid(child.tour, city_count) ||
+                !heap_insert(&next_population, &child)) {
+                return false;
+            }
+            consider_candidate(result, &child);
+            ++result->evaluated_tours;
+        }
+
+        current_population = next_population;
+        if (config->verbose) {
+            const node *generation_best = heap_peek_min(&current_population);
+            printf("Generation %d best: %.6f\n",
+                   generation,
+                   generation_best->cost);
         }
     }
-    gettimeofday(&t, NULL);
-    timea = t.tv_sec;
 
-    printf("\n");
-    printf("Optimal cost %lf\n", optimal);
-    printf("It took %d Secounds\n", timea - timeb);
-    flag = 0;
+    return current_population.size == (size_t)config->population_size &&
+           tour_is_valid(result->tour, result->city_count) &&
+           result->cost == tour_cost(cities, result->tour, result->city_count);
 }
