@@ -1,186 +1,201 @@
-# 🧭 Traveling Salesman Problem (TSP) — Brute Force & Genetic Algorithm
+# Traveling Salesman Problem: Exact and Evolutionary Search in C
 
-### Author: **Ben Mitchell**  
-**Language:** C (GCC, macOS ARM64)  
-**Demonstrates:** algorithmic optimization, memory management, and comparative performance between exhaustive and heuristic methods
+A C11 implementation of the Traveling Salesman Problem (TSP) that compares an
+exact exhaustive solver with a deterministic mutation-and-elitism evolutionary
+search. The project emphasizes algorithms and data structures implemented
+directly in C rather than external libraries.
 
----
+## What This Demonstrates
 
-## 📘 Overview
+- **Exact vs. heuristic optimization:** exhaustive `(n - 1)!` permutation
+  search compared with a population-based evolutionary search.
+- **Manual data-structure implementation:** a one-based, array-backed binary
+  min-heap / priority queue with percolate-up and percolate-down operations.
+- **Graph representation:** a weighted directed graph stored as an adjacency
+  matrix, with tours represented by fixed-size C arrays and structs.
+- **Reproducible engineering:** configurable deterministic seeds, eight focused
+  tests, strict compiler warnings, and sanitizer targets.
 
-This project explores two classic approaches to the **Traveling Salesman Problem (TSP)** — one of computer science’s most well-known NP-hard problems.  
+## Overview
 
-The goal is to find the shortest possible route that visits all cities exactly once and returns to the origin city.  
+TSP asks for the lowest-cost closed tour that visits every selected city
+exactly once. This project solves the same graph instance in two ways:
 
-| Algorithm | Description | Complexity |
-|------------|--------------|-------------|
-| **Brute Force** | Evaluates all permutations to guarantee the optimal path. | O(n!) |
-| **Genetic Algorithm (GA)** | Uses evolutionary heuristics (selection, mutation, elitism) to approximate the best route efficiently. | O(n × g) |
+- the **exact solver** evaluates every tour anchored at city 0 and guarantees
+  the optimum for supported input sizes;
+- the **evolutionary search** preserves elite routes and generates new routes
+  with swap mutation, but does not guarantee optimality.
 
-Together, they highlight the trade-off between **accuracy** and **efficiency** in combinatorial optimization.
+The bundled dataset is a **directed/asymmetric** weighted graph: traveling from
+city A to city B may have a different cost than traveling from B to A. Using
+the same selected cities for both solvers makes the exact result a useful
+baseline for evaluating the heuristic.
 
----
+## Algorithms
 
-## ⚙️ Program Behavior
+### Exhaustive permutation search
 
-When you run the program, it performs the following steps:
+The exact solver anchors city 0 because rotating a closed tour does not create
+a distinct route. It generates the remaining tours one at a time with a
+lexicographic next-permutation algorithm and evaluates all `(n - 1)!`
+possibilities. The recursive factorial calculation includes overflow checks.
 
-1. Reads a square matrix of distances between cities from `cities.dat`.
-2. Prints the full distance matrix for verification.
-3. Executes the **Brute Force algorithm** and displays every route and cost.
-4. Executes the **Genetic Algorithm**, evolving over multiple generations.
-5. Displays the final optimal cost and runtime for both methods.
+Because every anchored tour is evaluated, this solver reports the exact
+optimum for the selected cities.
 
----
+### Mutation-and-elitism evolutionary search
 
-## 📂 File Structure
+The heuristic intentionally uses selection, elitism, and swap mutation without
+crossover:
 
-| File | Description |
-|------|--------------|
-| `graph.c / graph.h` | Handles graph initialization and distance matrix parsing. |
-| `queue.c / queue.h` | Implements a heap-based priority queue for population management. |
-| `function.c / function.h` | Contains both the brute-force and genetic algorithms plus helper functions. |
-| `tester.c` | Entry point used by the instructor’s test harness. |
-| `makefile` | Automates compilation and linking (`make`, `make clean`, `make run`). |
+1. Create exactly `P` valid tours while keeping city 0 anchored.
+2. Evaluate each route and rank the population with the binary min-heap.
+3. Copy the best `E` elite candidates unchanged into the next generation.
+4. Fill the remaining positions with mutated children selected from the best
+   `max(P / 2, E)` parents, recalculating every child's route cost before heap
+   insertion.
 
----
+Every generation contains exactly `P` candidates. The search tracks the best
+route seen across all generations and reports it as a heuristic result. It is
+called optimal only when it matches the independently computed exact result.
 
-## 💾 Input Format (`cities.dat`)
+### Exact vs. heuristic tradeoff
 
-Provide a symmetric distance matrix (N×N) with zero diagonals.  
-Example for **5 cities**:
+| Approach | Result | Search effort | Role in this project |
+|---|---|---|---|
+| Exhaustive permutation search | Guaranteed optimum | Factorial growth | Exact baseline for small instances |
+| Evolutionary search | Best route found; no guarantee | Configurable population and generations | Faster exploration of a smaller candidate set |
 
-```
-0 29 20 21 16
-29 0 15 17 28
-20 15 0 28 39
-21 17 28 0 13
-16 28 39 13 0
-```
+## Data Structures
 
----
+- **Adjacency matrix:** `graph.c` loads a fixed `20 x 20` directed cost matrix.
+  The 380 off-diagonal values come from `cities.dat`; diagonal entries are set
+  to zero.
+- **Binary min-heap:** `queue.c` manually implements a one-based priority queue.
+  Each node stores a route, active city count, and corresponding `double` cost.
+- **Fixed route records:** tours and results use C arrays and structs. The
+  implementation performs no dynamic allocation.
 
-## 🧮 Brute Force Algorithm
+The heap retains the original coursework population limit of 12 while keeping
+the representation and heap operations visible and independently testable.
 
-- Prints **every permutation** of city orders.
-- Calculates and displays the **total travel cost** for each.
-- Tracks and reports the **minimum cost path**.
-- Execution time measured via `gettimeofday()`.
+## Example Results
 
-Example output excerpt:
-```
-|0||1||2||3||4||0|  Cost = 125.00  
-|0||1||3||2||4||0|  Cost = 122.00  
-...
-Optimal Cost: 112.00
-It took 1 second
-```
-
----
-
-## 🧬 Genetic Algorithm
-
-The GA begins with a randomized population of possible tours and evolves them over multiple generations.
-
-### ✳️ Key Features
-- **Randomized initialization** (new each run)
-- **User-controlled mutation rate** (number of cities swapped)
-- **Elitism** (top performers survive)
-- **Heap-based selection**
-- **Optional fixed seed for reproducibility**
-
-### 🧠 Runtime Parameters
-
-| Prompt | Description | Typical Range |
-|--------|--------------|----------------|
-| `How many generations to run?` | Total iterations of evolution | 10–50 |
-| `Population size? (0–12)` | Number of candidate routes | 4–12 |
-| `How many cities are you visiting? (0–19)` | Subset of cities | 4–10 |
-| `Percentage of population to keep as elites?` | Controls elitism | 10–40 |
-| `How many cities to swap on mutation?` | Mutation strength | 1–3 |
-
----
-
-## 🧪 Example Run
-
-```
-Brute Force Optimal Cost: 1596.232086
-It took 0 Seconds
-
-Genetic Algorithm
-Generation 1 → Best Cost: 2600.898034  
-Generation 5 → Best Cost: 2398.615478  
-Generation 10 → Best Cost: 1911.716072  
-Generation 15 → Best Cost: 1596.232086 ✅
-
-GA matched the Brute Force optimum at generation 15
-```
-
----
-
-## 🧰 Enhancements & Safeguards
-
-- ✅ **Memory safety:** `memset` and `memcpy` corrected to avoid leaks  
-- ✅ **Symmetry validation:** ensures matrix consistency  
-- ✅ **Input validation:** clamps city and population values  
-- ✅ **Optional early-stop:** halts GA if no improvement over several generations  
-- ✅ **Reproducible runs:** use `srand(12345)` instead of `srand(time(NULL))`  
-
----
-
-## ⏱️ Performance Notes
-
-| Metric | Brute Force | Genetic Algorithm |
-|---------|--------------|-------------------|
-| Optimality | Always exact | Typically near or equal |
-| Speed (5 cities) | Instant | Instant |
-| Speed (10 cities) | Exponential growth | Linear per generation |
-| Memory | Factorial growth | Constant population-based |
-
----
-
-## 🧾 Sample Output Summary
-
-- Prints complete **distance matrix**
-- Displays every permutation and **cost**
-- Shows **generation progress** for GA
-- Reports **best cost and runtime**
-
-```
-Optimal cost 1596.232086
-GA best cost 1596.232086 (reached at generation 15)
-It took 0 Seconds
-```
-
----
-
-## 🧩 Concepts Demonstrated
-
-- Brute-force recursion and permutation generation  
-- Priority queues (min-heaps)  
-- Randomized algorithms and mutation control  
-- Comparative algorithmic efficiency  
-- Input validation and memory management  
-- Time measurement and performance profiling  
-
----
-
-## 🧠 Future Improvements
-
-- Implement **2-opt** local search for GA refinement  
-- Add **CSV logging** of generation vs cost  
-- Visualize paths using a simple Python or C graphics extension  
-- Multi-thread the brute-force search for benchmarking
-
----
-
-### ✨ Summary
-This project provides a clear demonstration of how **heuristic algorithms** like Genetic Algorithms can approximate NP-hard solutions with remarkable efficiency.  
-It also highlights the contrast between exhaustive accuracy and practical optimization — the cornerstone of modern algorithmic design.
-
----
+The following result was generated from the final executable with a fixed seed:
 
 ```bash
-$ make clean && make && ./tsp
+./tsp --cities 5 --generations 10 --population 8 \
+  --elite-percent 25 --mutation-swaps 1 --seed 12345
 ```
-Enjoy exploring the balance between **precision** and **performance** 🚀
+
+Output excerpt (machine-dependent timing lines omitted):
+
+```text
+Traveling Salesman Problem comparison
+Cities: 5 | Population: 8 | Generations: 10 | Seed: 12345
+
+Exact exhaustive search
+  Cost: 1596.232086
+  Tour: 0 -> 3 -> 2 -> 4 -> 1 -> 0
+  Evaluated tours: 24
+
+Mutation-and-elitism evolutionary search
+  Cost: 1598.017482
+  Tour: 0 -> 3 -> 4 -> 2 -> 1 -> 0
+  Evaluated tours: 68
+
+Comparison: heuristic gap = 1.785397 (0.11% above optimum).
+```
+
+This run illustrates the intended comparison: the exact solver establishes the
+optimum, while the heuristic examines fewer candidates and finds a route within
+0.11% of it. A given seed and configuration reproduce the same routes and
+costs.
+
+## Build and Run
+
+Requirements are a C11 compiler such as Clang or GCC, Make, and a POSIX-like
+environment.
+
+```bash
+make           # Build tsp with strict warnings enabled
+make run       # Build and run the default configuration
+make test      # Build and run the deterministic test suite
+make sanitize  # Test with AddressSanitizer and UndefinedBehaviorSanitizer
+make clean     # Remove generated build files
+```
+
+Running `./tsp` without options uses eight cities, 50 generations, population
+12, 25% elites, one swap per generated child, and seed `12345`.
+
+```text
+--cities N          Cities used by both solvers (3-12)
+--generations N     Evolutionary generations (0-100000)
+--population N      Population size (2-12)
+--elite-percent N   Population retained unchanged (1-100)
+--mutation-swaps N  City swaps per generated child (1-N-1)
+--seed N            Deterministic 32-bit random seed
+--data PATH         Off-diagonal 20-city distance data
+--verbose           Print exact candidates and generation progress
+--print-graph       Print the selected adjacency matrix
+--help              Show command-line help
+```
+
+Default output is concise. `--verbose` prints every exact candidate and the
+best cost at each evolutionary generation.
+
+## Testing
+
+`make test` runs eight deterministic C tests covering:
+
+- tour cost calculation;
+- binary min-heap ordering;
+- anchored permutation validity and count;
+- the exact optimum for a known four-city graph;
+- mutation preserving a valid permutation;
+- repeatable fixed-seed heuristic results;
+- heuristic route/fitness agreement; and
+- recursive factorial overflow protection.
+
+`make sanitize` runs the same suite with AddressSanitizer and
+UndefinedBehaviorSanitizer.
+
+## Complexity
+
+Let `n` be the selected city count, `P` the population size, `E` the elite
+count, and `G` the number of generations.
+
+| Operation | Complexity |
+|---|---|
+| Adjacency matrix storage | `O(MAXNUM^2)` |
+| Route-cost calculation | `O(n)` |
+| Next permutation | `O(n)` worst case |
+| Heap insertion or deletion | `O(log P)` comparisons, plus fixed route-record copying |
+| Exhaustive search | `O(n * (n - 1)!)` time and `O(n)` route workspace |
+| Evolutionary search | Approximately `O(P*n + G*(P*log P + (P-E)*n))` time and `O(P*n)` population storage |
+
+Verbose console output is intended for inspection rather than performance
+measurement.
+
+## Project Background
+
+This project originated as university data structures and algorithms
+coursework. It was later revisited to improve algorithmic correctness,
+reproducibility, input safety, automated testing, and documentation while
+preserving its original C implementation and core algorithms.
+
+The adjacency matrix, lexicographic permutation search, recursive factorial,
+binary min-heap, elitism, swap mutation, and Make-based workflow remain central
+to the project.
+
+## Limitations
+
+- Exact search is limited to 12 cities and becomes expensive near that limit
+  because of factorial growth.
+- The evolutionary search uses a maximum population of 12 and does not
+  guarantee an optimum; it intentionally omits crossover and local-search
+  refinements such as 2-opt.
+- Input uses the project's fixed 380-value, 20-city directed graph format
+  rather than a general TSP file format.
+- The implementation uses fixed arrays and is single-threaded, consistent with
+  its data-structures coursework scope.
