@@ -1,0 +1,6 @@
+.DS_Store
+*.dSYM/
+*.o
+tsp
+tsp-tests
+tsp-tests-sanitize
