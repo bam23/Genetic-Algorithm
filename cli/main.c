@@ -2,8 +2,7 @@
  Original tester/driver, retained as the command-line entry point.
 ***************************************************************/
 
-#include "solver_internal.h"
-#include "graph.h"
+#include <tsp/tsp.h>
 
 #include <errno.h>
 #include <inttypes.h>
@@ -23,7 +22,6 @@ typedef struct program_config {
     int mutation_swaps;
     uint32_t seed;
     const char *data_path;
-    bool verbose;
     bool print_graph;
 } program_config;
 
@@ -37,7 +35,6 @@ static void print_usage(const char *program)
     puts("  --mutation-swaps N  City swaps per generated child (1-N-1)");
     puts("  --seed N            Deterministic 32-bit random seed");
     puts("  --data PATH         Off-diagonal 20-city distance data");
-    puts("  --verbose           Print exact candidates and generation progress");
     puts("  --print-graph       Print the selected adjacency matrix");
     puts("  --help              Show this message");
 }
@@ -85,10 +82,6 @@ static bool parse_arguments(int argc, char *argv[], program_config *config)
             print_usage(argv[0]);
             exit(EXIT_SUCCESS);
         }
-        if (strcmp(option, "--verbose") == 0) {
-            config->verbose = true;
-            continue;
-        }
         if (strcmp(option, "--print-graph") == 0) {
             config->print_graph = true;
             continue;
@@ -100,9 +93,13 @@ static bool parse_arguments(int argc, char *argv[], program_config *config)
 
         const char *value = argv[++index];
         if (strcmp(option, "--cities") == 0) {
-            if (!parse_int(value, 3, MAX_EXACT_CITIES, &config->city_count)) {
-                fprintf(stderr, "Error: --cities must be between 3 and %d\n",
-                        MAX_EXACT_CITIES);
+            if (!parse_int(value,
+                           3,
+                           TSP_MAX_BRUTEFORCE_CITIES,
+                           &config->city_count)) {
+                fprintf(stderr,
+                        "Error: --cities must be between 3 and %d\n",
+                        TSP_MAX_BRUTEFORCE_CITIES);
                 return false;
             }
         } else if (strcmp(option, "--generations") == 0) {
@@ -112,9 +109,13 @@ static bool parse_arguments(int argc, char *argv[], program_config *config)
                 return false;
             }
         } else if (strcmp(option, "--population") == 0) {
-            if (!parse_int(value, 2, MAX_POPULATION, &config->population_size)) {
-                fprintf(stderr, "Error: --population must be between 2 and %d\n",
-                        MAX_POPULATION);
+            if (!parse_int(value,
+                           2,
+                           TSP_MAX_POPULATION,
+                           &config->population_size)) {
+                fprintf(stderr,
+                        "Error: --population must be between 2 and %d\n",
+                        TSP_MAX_POPULATION);
                 return false;
             }
         } else if (strcmp(option, "--elite-percent") == 0) {
@@ -124,15 +125,19 @@ static bool parse_arguments(int argc, char *argv[], program_config *config)
                 return false;
             }
         } else if (strcmp(option, "--mutation-swaps") == 0) {
-            if (!parse_int(value, 1, MAXNUM - 1, &config->mutation_swaps)) {
+            if (!parse_int(value,
+                           1,
+                           TSP_MAX_CITIES - 1,
+                           &config->mutation_swaps)) {
                 fprintf(stderr,
                         "Error: --mutation-swaps must be between 1 and %d\n",
-                        MAXNUM - 1);
+                        TSP_MAX_CITIES - 1);
                 return false;
             }
         } else if (strcmp(option, "--seed") == 0) {
             if (!parse_seed(value, &config->seed)) {
-                fputs("Error: --seed must be a 32-bit unsigned integer\n", stderr);
+                fputs("Error: --seed must be a 32-bit unsigned integer\n",
+                      stderr);
                 return false;
             }
         } else if (strcmp(option, "--data") == 0) {
@@ -159,7 +164,17 @@ static double current_time_seconds(void)
     return (double)time_value.tv_sec + ((double)time_value.tv_usec / 1000000.0);
 }
 
-static void print_result(const search_result *result)
+static void print_graph(const tsp_graph *graph, int city_count)
+{
+    for (int row = 0; row < city_count; ++row) {
+        for (int column = 0; column < city_count; ++column) {
+            printf("%8.2f ", graph->costs[row][column]);
+        }
+        putchar('\n');
+    }
+}
+
+static void print_result(const tsp_result *result)
 {
     printf("  Cost: %.6f\n  Tour: ", result->cost);
     for (int index = 0; index < result->city_count; ++index) {
@@ -167,7 +182,7 @@ static void print_result(const search_result *result)
     }
     printf("%d\n  Evaluated tours: %" PRIu64 "\n",
            result->tour[0],
-           result->evaluated_tours);
+           result->candidates_evaluated);
 }
 
 int main(int argc, char *argv[])
@@ -180,7 +195,6 @@ int main(int argc, char *argv[])
         .mutation_swaps = 1,
         .seed = UINT32_C(12345),
         .data_path = "cities.dat",
-        .verbose = false,
         .print_graph = false
     };
 
@@ -189,72 +203,88 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    double cities[MAXNUM][MAXNUM];
-    if (!graph_load(config.data_path, cities)) {
+    tsp_graph graph;
+    tsp_status status = tsp_graph_load(&graph, config.data_path);
+    if (status != TSP_STATUS_OK) {
+        fprintf(stderr,
+                "Error: could not load %s: %s\n",
+                config.data_path,
+                tsp_status_string(status));
         return EXIT_FAILURE;
     }
     if (config.print_graph) {
-        graph_print(cities, config.city_count);
+        print_graph(&graph, config.city_count);
     }
 
-    search_result exact_result;
-    const double exact_start = current_time_seconds();
-    if (!exhaustive_search(cities,
-                           config.city_count,
-                           config.verbose,
-                           &exact_result)) {
-        fputs("Error: exhaustive search failed\n", stderr);
+    const tsp_bruteforce_config brute_force = {
+        .city_count = config.city_count
+    };
+    tsp_result brute_force_result;
+    const double brute_force_start = current_time_seconds();
+    status = tsp_solve_bruteforce(&graph,
+                                  &brute_force,
+                                  &brute_force_result);
+    if (status != TSP_STATUS_OK) {
+        fprintf(stderr,
+                "Error: brute-force search failed: %s\n",
+                tsp_status_string(status));
         return EXIT_FAILURE;
     }
-    const double exact_elapsed = current_time_seconds() - exact_start;
+    const double brute_force_elapsed =
+        current_time_seconds() - brute_force_start;
 
     int elite_count = (config.population_size * config.elite_percent) / 100;
     if (elite_count < 1) {
         elite_count = 1;
     }
 
-    const evolution_config evolution = {
+    const tsp_evolution_config evolution = {
+        .city_count = config.city_count,
         .population_size = config.population_size,
         .generations = config.generations,
         .elite_count = elite_count,
         .mutation_swaps = config.mutation_swaps,
-        .seed = config.seed,
-        .verbose = config.verbose
+        .seed = config.seed
     };
 
-    search_result heuristic_result;
-    const double heuristic_start = current_time_seconds();
-    if (!evolutionary_search(cities,
-                             config.city_count,
-                             &evolution,
-                             &heuristic_result)) {
-        fputs("Error: evolutionary search failed\n", stderr);
+    tsp_result evolutionary_result;
+    const double evolutionary_start = current_time_seconds();
+    status = tsp_solve_evolutionary(&graph,
+                                    &evolution,
+                                    &evolutionary_result);
+    if (status != TSP_STATUS_OK) {
+        fprintf(stderr,
+                "Error: evolutionary search failed: %s\n",
+                tsp_status_string(status));
         return EXIT_FAILURE;
     }
-    const double heuristic_elapsed = current_time_seconds() - heuristic_start;
+    const double evolutionary_elapsed =
+        current_time_seconds() - evolutionary_start;
 
     puts("Traveling Salesman Problem comparison");
-    printf("Cities: %d | Population: %d | Generations: %d | Seed: %" PRIu32 "\n\n",
+    printf("Cities: %d | Population: %d | Generations: %d | Seed: %" PRIu32
+           "\n\n",
            config.city_count,
            config.population_size,
            config.generations,
            config.seed);
 
-    puts("Exact exhaustive search");
-    print_result(&exact_result);
-    printf("  Elapsed: %.6f seconds\n\n", exact_elapsed);
+    puts("Brute-force exhaustive search");
+    print_result(&brute_force_result);
+    printf("  Elapsed: %.6f seconds\n\n", brute_force_elapsed);
 
     puts("Mutation-and-elitism evolutionary search");
-    print_result(&heuristic_result);
-    printf("  Elapsed: %.6f seconds\n", heuristic_elapsed);
+    print_result(&evolutionary_result);
+    printf("  Elapsed: %.6f seconds\n", evolutionary_elapsed);
 
-    const double difference = heuristic_result.cost - exact_result.cost;
+    const double difference =
+        evolutionary_result.cost - brute_force_result.cost;
     if (fabs(difference) <= 1.0e-9) {
-        puts("\nComparison: the heuristic matched the exact optimum for this run.");
+        puts("\nComparison: the heuristic matched the brute-force optimum.");
     } else {
         printf("\nComparison: heuristic gap = %.6f (%.2f%% above optimum).\n",
                difference,
-               (difference / exact_result.cost) * 100.0);
+               (difference / brute_force_result.cost) * 100.0);
     }
 
     return EXIT_SUCCESS;

@@ -13,7 +13,7 @@ PROGRAM = tsp
 TEST_PROGRAM = tsp-tests
 SANITIZE_PROGRAM = tsp-tests-sanitize
 
-CORE_SOURCES = src/graph.c src/solver.c src/heap.c
+CORE_SOURCES = src/graph.c src/heap.c src/solver.c src/status.c
 CORE_OBJECTS = $(CORE_SOURCES:src/%.c=$(BUILD_DIR)/src/%.o)
 CLI_OBJECT = $(BUILD_DIR)/cli/main.o
 TEST_OBJECT = $(BUILD_DIR)/tests/tests.o
@@ -28,21 +28,21 @@ $(PROGRAM): $(CLI_OBJECT) $(LIBRARY)
 $(LIBRARY): $(CORE_OBJECTS)
 	$(AR) $(ARFLAGS) $@ $^
 
-$(BUILD_DIR)/src/%.o: src/%.c
+$(BUILD_DIR)/src/%.o: src/%.c include/tsp/tsp.h
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(WARNINGS) -Isrc -c $< -o $@
+	$(CC) $(CFLAGS) $(WARNINGS) -Iinclude -Isrc -c $< -o $@
 
-$(BUILD_DIR)/src/graph.o: src/graph.h
-$(BUILD_DIR)/src/solver.o: src/solver_internal.h src/graph.h src/heap.h
-$(BUILD_DIR)/src/heap.o: src/heap.h src/graph.h
+$(BUILD_DIR)/src/heap.o: src/heap.h
+$(BUILD_DIR)/src/solver.o: src/heap.h src/solver_internal.h
 
-$(CLI_OBJECT): cli/main.c src/solver_internal.h src/graph.h src/heap.h
+$(CLI_OBJECT): cli/main.c include/tsp/tsp.h
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(WARNINGS) -Isrc -c $< -o $@
+	$(CC) $(CFLAGS) $(WARNINGS) -Iinclude -c $< -o $@
 
-$(TEST_OBJECT): tests/tests.c src/solver_internal.h src/graph.h src/heap.h
+$(TEST_OBJECT): tests/tests.c include/tsp/tsp.h src/heap.h \
+	src/solver_internal.h
 	mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) $(WARNINGS) -Isrc -c $< -o $@
+	$(CC) $(CFLAGS) $(WARNINGS) -Iinclude -Isrc -c $< -o $@
 
 $(TEST_PROGRAM): $(TEST_OBJECT) $(LIBRARY)
 	$(CC) $(CFLAGS) $(WARNINGS) -o $@ $(TEST_OBJECT) $(LIBRARY) $(LDLIBS)
@@ -55,9 +55,10 @@ test: $(TEST_PROGRAM)
 
 sanitize:
 	$(CC) $(WARNINGS) -O1 -g -fsanitize=address,undefined \
-		-fno-omit-frame-pointer -Isrc $(CORE_SOURCES) tests/tests.c \
-		-o $(SANITIZE_PROGRAM) $(LDLIBS)
+		-fno-omit-frame-pointer -Iinclude -Isrc \
+		$(CORE_SOURCES) tests/tests.c -o $(SANITIZE_PROGRAM) $(LDLIBS)
 	./$(SANITIZE_PROGRAM)
+
 
 clean:
 	rm -rf $(BUILD_DIR)

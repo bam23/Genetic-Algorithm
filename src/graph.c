@@ -1,56 +1,37 @@
-#include "graph.h"
+#include <tsp/tsp.h>
 
 #include <stdio.h>
 
-bool graph_load(const char *path, double cities[MAXNUM][MAXNUM])
+tsp_status tsp_graph_load(tsp_graph *out_graph, const char *path)
 {
-    if (path == NULL || cities == NULL) {
-        return false;
+    if (out_graph == NULL || path == NULL) {
+        return TSP_STATUS_INVALID_ARGUMENT;
     }
 
     FILE *file = fopen(path, "r");
     if (file == NULL) {
-        fprintf(stderr, "Error: could not open %s\n", path);
-        return false;
+        return TSP_STATUS_IO_ERROR;
     }
 
-    for (int row = 0; row < MAXNUM; ++row) {
-        for (int column = 0; column < MAXNUM; ++column) {
+    tsp_graph graph = { .costs = { { 0.0 } }, .city_count = TSP_MAX_CITIES };
+    for (int row = 0; row < TSP_MAX_CITIES; ++row) {
+        for (int column = 0; column < TSP_MAX_CITIES; ++column) {
             if (row == column) {
-                cities[row][column] = 0.0;
-            } else if (fscanf(file, "%lf", &cities[row][column]) != 1) {
-                fprintf(stderr,
-                        "Error: malformed %s at matrix position (%d,%d)\n",
-                        path,
-                        row,
-                        column);
+                graph.costs[row][column] = 0.0;
+            } else if (fscanf(file, "%lf", &graph.costs[row][column]) != 1) {
                 fclose(file);
-                return false;
+                return TSP_STATUS_INVALID_DATA;
             }
         }
     }
 
     double extra_value = 0.0;
     if (fscanf(file, "%lf", &extra_value) == 1) {
-        fprintf(stderr, "Error: %s contains more than 380 distance values\n", path);
         fclose(file);
-        return false;
+        return TSP_STATUS_INVALID_DATA;
     }
 
     fclose(file);
-    return true;
-}
-
-void graph_print(const double cities[MAXNUM][MAXNUM], int city_count)
-{
-    if (cities == NULL || city_count < 1 || city_count > MAXNUM) {
-        return;
-    }
-
-    for (int row = 0; row < city_count; ++row) {
-        for (int column = 0; column < city_count; ++column) {
-            printf("%8.2f ", cities[row][column]);
-        }
-        putchar('\n');
-    }
+    *out_graph = graph;
+    return TSP_STATUS_OK;
 }

@@ -1,18 +1,19 @@
+#include <tsp/tsp.h>
+
+#include "heap.h"
 #include "solver_internal.h"
 
 #include <float.h>
-#include <inttypes.h>
-#include <stdio.h>
 #include <string.h>
 
-static uint32_t random_next(random_state *state)
+static uint32_t random_next(tsp_random_state *state)
 {
     /* Defined-width arithmetic makes fixed seeds portable and repeatable. */
     state->value = (state->value * UINT32_C(1664525)) + UINT32_C(1013904223);
     return state->value;
 }
 
-static int random_bounded(random_state *state, int upper_bound)
+static int random_bounded(tsp_random_state *state, int upper_bound)
 {
     if (state == NULL || upper_bound <= 0) {
         return 0;
@@ -20,26 +21,26 @@ static int random_bounded(random_state *state, int upper_bound)
     return (int)(random_next(state) % (uint32_t)upper_bound);
 }
 
-static void swap_positions(int tour[MAXNUM], int first, int second)
+static void swap_positions(int tour[TSP_MAX_CITIES], int first, int second)
 {
     const int temporary = tour[first];
     tour[first] = tour[second];
     tour[second] = temporary;
 }
 
-static void initialize_identity_tour(int tour[MAXNUM], int city_count)
+static void initialize_identity_tour(int tour[TSP_MAX_CITIES], int city_count)
 {
     for (int i = 0; i < city_count; ++i) {
         tour[i] = i;
     }
-    for (int i = city_count; i < MAXNUM; ++i) {
+    for (int i = city_count; i < TSP_MAX_CITIES; ++i) {
         tour[i] = 0;
     }
 }
 
-static void shuffle_tour_tail(int tour[MAXNUM],
+static void shuffle_tour_tail(int tour[TSP_MAX_CITIES],
                               int city_count,
-                              random_state *state)
+                              tsp_random_state *state)
 {
     /* Keep city 0 anchored; rotating a closed tour does not create a new tour. */
     for (int i = city_count - 1; i > 1; --i) {
@@ -48,22 +49,20 @@ static void shuffle_tour_tail(int tour[MAXNUM],
     }
 }
 
-static void print_tour(const int tour[MAXNUM], int city_count)
-{
-    for (int i = 0; i < city_count; ++i) {
-        printf("%d -> ", tour[i]);
-    }
-    printf("%d", tour[0]);
-}
-
-static void initialize_result(search_result *result, int city_count)
+static void initialize_result(tsp_result *result,
+                              int city_count,
+                              tsp_algorithm algorithm,
+                              bool guaranteed_optimal)
 {
     memset(result, 0, sizeof(*result));
     result->city_count = city_count;
     result->cost = DBL_MAX;
+    result->algorithm = algorithm;
+    result->guaranteed_optimal = guaranteed_optimal;
 }
 
-static void consider_candidate(search_result *result, const node *candidate)
+static void consider_candidate(tsp_result *result,
+                               const tsp_candidate *candidate)
 {
     if (candidate->cost < result->cost) {
         result->cost = candidate->cost;
@@ -74,43 +73,48 @@ static void consider_candidate(search_result *result, const node *candidate)
     }
 }
 
-static node make_candidate(const double cities[MAXNUM][MAXNUM],
-                           const int tour[MAXNUM],
-                           int city_count)
+static tsp_candidate make_candidate(const tsp_graph *graph,
+                                    const int tour[TSP_MAX_CITIES],
+                                    int city_count)
 {
-    node candidate = { .tour = { 0 }, .city_count = city_count, .cost = 0.0 };
+    tsp_candidate candidate = {
+        .tour = { 0 },
+        .city_count = city_count,
+        .cost = 0.0
+    };
     memcpy(candidate.tour,
            tour,
            (size_t)city_count * sizeof(candidate.tour[0]));
-    candidate.cost = tour_cost(cities, candidate.tour, city_count);
+    candidate.cost = tsp_tour_cost(graph, candidate.tour, city_count);
     return candidate;
 }
 
-double tour_cost(const double cities[MAXNUM][MAXNUM],
-                 const int tour[MAXNUM],
-                 int city_count)
+double tsp_tour_cost(const tsp_graph *graph,
+                     const int tour[TSP_MAX_CITIES],
+                     int city_count)
 {
-    if (cities == NULL || tour == NULL ||
-        city_count < 2 || city_count > MAXNUM ||
-        !tour_is_valid(tour, city_count)) {
+    if (graph == NULL || tour == NULL ||
+        city_count < 2 || city_count > TSP_MAX_CITIES ||
+        city_count > graph->city_count ||
+        !tsp_tour_is_valid(tour, city_count)) {
         return DBL_MAX;
     }
 
     double total = 0.0;
     for (int i = 0; i < city_count; ++i) {
         const int next = (i + 1) % city_count;
-        total += cities[tour[i]][tour[next]];
+        total += graph->costs[tour[i]][tour[next]];
     }
     return total;
 }
 
-bool tour_is_valid(const int tour[MAXNUM], int city_count)
+bool tsp_tour_is_valid(const int tour[TSP_MAX_CITIES], int city_count)
 {
-    if (tour == NULL || city_count < 2 || city_count > MAXNUM) {
+    if (tour == NULL || city_count < 2 || city_count > TSP_MAX_CITIES) {
         return false;
     }
 
-    bool seen[MAXNUM] = { false };
+    bool seen[TSP_MAX_CITIES] = { false };
     for (int i = 0; i < city_count; ++i) {
         const int city = tour[i];
         if (city < 0 || city >= city_count || seen[city]) {
@@ -141,7 +145,7 @@ static bool factorial_recursive_checked(int number, uint64_t *result)
     return true;
 }
 
-bool factorial_checked(int number, uint64_t *result)
+bool tsp_factorial_checked(int number, uint64_t *result)
 {
     if (result == NULL || number < 0) {
         return false;
@@ -151,14 +155,13 @@ bool factorial_checked(int number, uint64_t *result)
     return factorial_recursive_checked(number, result);
 }
 
-bool next_permutation(int tour[MAXNUM], int city_count)
+bool tsp_next_permutation(int tour[TSP_MAX_CITIES], int city_count)
 {
-    if (tour == NULL || city_count < 2 || city_count > MAXNUM) {
+    if (tour == NULL || city_count < 2 || city_count > TSP_MAX_CITIES) {
         return false;
     }
 
-    /* This is the original lexicographic algorithm, restricted to indices
-       1..city_count-1 so city 0 remains the anchor. */
+    /* Preserve the original lexicographic algorithm and city 0 anchor. */
     int pivot = city_count - 2;
     while (pivot >= 1 && tour[pivot] >= tour[pivot + 1]) {
         --pivot;
@@ -183,20 +186,20 @@ bool next_permutation(int tour[MAXNUM], int city_count)
     return true;
 }
 
-void random_state_init(random_state *state, uint32_t seed)
+void tsp_random_state_init(tsp_random_state *state, uint32_t seed)
 {
     if (state != NULL) {
         state->value = seed;
     }
 }
 
-void mutate_tour(int tour[MAXNUM],
-                 int city_count,
-                 int swap_count,
-                 random_state *state)
+void tsp_mutate_tour(int tour[TSP_MAX_CITIES],
+                     int city_count,
+                     int swap_count,
+                     tsp_random_state *state)
 {
     if (tour == NULL || state == NULL || city_count < 3 ||
-        city_count > MAXNUM || swap_count < 1) {
+        city_count > TSP_MAX_CITIES || swap_count < 1) {
         return;
     }
 
@@ -210,101 +213,106 @@ void mutate_tour(int tour[MAXNUM],
     }
 }
 
-bool exhaustive_search(const double cities[MAXNUM][MAXNUM],
-                       int city_count,
-                       bool verbose,
-                       search_result *result)
+tsp_status tsp_solve_bruteforce(const tsp_graph *graph,
+                                const tsp_bruteforce_config *config,
+                                tsp_result *out_result)
 {
-    if (cities == NULL || result == NULL ||
-        city_count < 2 || city_count > MAX_EXACT_CITIES) {
-        return false;
+    if (graph == NULL || config == NULL || out_result == NULL ||
+        config->city_count < 2) {
+        return TSP_STATUS_INVALID_ARGUMENT;
+    }
+    if (config->city_count > TSP_MAX_BRUTEFORCE_CITIES ||
+        config->city_count > graph->city_count) {
+        return TSP_STATUS_LIMIT_EXCEEDED;
     }
 
     uint64_t permutation_count = 0U;
-    if (!factorial_checked(city_count - 1, &permutation_count)) {
-        return false;
+    if (!tsp_factorial_checked(config->city_count - 1, &permutation_count)) {
+        return TSP_STATUS_ARITHMETIC_OVERFLOW;
     }
 
-    initialize_result(result, city_count);
-    int tour[MAXNUM] = { 0 };
-    initialize_identity_tour(tour, city_count);
+    initialize_result(out_result,
+                      config->city_count,
+                      TSP_ALGORITHM_BRUTE_FORCE,
+                      true);
+    int tour[TSP_MAX_CITIES] = { 0 };
+    initialize_identity_tour(tour, config->city_count);
 
     for (uint64_t index = 0U; index < permutation_count; ++index) {
-        const node candidate = make_candidate(cities, tour, city_count);
-        consider_candidate(result, &candidate);
-        ++result->evaluated_tours;
-
-        if (verbose) {
-            printf("Exact candidate %" PRIu64 ": ", index + UINT64_C(1));
-            print_tour(candidate.tour, city_count);
-            printf("  cost=%.6f\n", candidate.cost);
-        }
+        const tsp_candidate candidate =
+            make_candidate(graph, tour, config->city_count);
+        consider_candidate(out_result, &candidate);
+        ++out_result->candidates_evaluated;
 
         if (index + UINT64_C(1) < permutation_count &&
-            !next_permutation(tour, city_count)) {
-            return false;
+            !tsp_next_permutation(tour, config->city_count)) {
+            return TSP_STATUS_INTERNAL_ERROR;
         }
     }
-    return true;
+    return TSP_STATUS_OK;
 }
 
-bool evolutionary_search(const double cities[MAXNUM][MAXNUM],
-                         int city_count,
-                         const evolution_config *config,
-                         search_result *result)
+tsp_status tsp_solve_evolutionary(const tsp_graph *graph,
+                                  const tsp_evolution_config *config,
+                                  tsp_result *out_result)
 {
-    if (cities == NULL || config == NULL || result == NULL ||
-        city_count < 3 || city_count > MAXNUM ||
+    if (graph == NULL || config == NULL || out_result == NULL ||
+        config->city_count < 3 ||
         config->population_size < 2 ||
-        config->population_size > MAX_POPULATION ||
         config->generations < 0 ||
         config->elite_count < 1 ||
         config->elite_count > config->population_size ||
         config->mutation_swaps < 1 ||
-        config->mutation_swaps >= city_count) {
-        return false;
+        config->mutation_swaps >= config->city_count) {
+        return TSP_STATUS_INVALID_ARGUMENT;
+    }
+    if (config->city_count > TSP_MAX_CITIES ||
+        config->city_count > graph->city_count ||
+        config->population_size > TSP_MAX_POPULATION) {
+        return TSP_STATUS_LIMIT_EXCEEDED;
     }
 
-    initialize_result(result, city_count);
-    random_state random;
-    random_state_init(&random, config->seed);
+    initialize_result(out_result,
+                      config->city_count,
+                      TSP_ALGORITHM_EVOLUTIONARY,
+                      false);
+    tsp_random_state random;
+    tsp_random_state_init(&random, config->seed);
 
-    min_heap current_population;
-    heap_init(&current_population, (size_t)config->population_size);
+    tsp_min_heap current_population;
+    tsp_heap_init(&current_population, (size_t)config->population_size);
 
     for (int member = 0; member < config->population_size; ++member) {
-        int tour[MAXNUM] = { 0 };
-        initialize_identity_tour(tour, city_count);
-        shuffle_tour_tail(tour, city_count, &random);
+        int tour[TSP_MAX_CITIES] = { 0 };
+        initialize_identity_tour(tour, config->city_count);
+        shuffle_tour_tail(tour, config->city_count, &random);
 
-        const node candidate = make_candidate(cities, tour, city_count);
-        if (!heap_insert(&current_population, &candidate)) {
-            return false;
+        const tsp_candidate candidate =
+            make_candidate(graph, tour, config->city_count);
+        if (!tsp_heap_insert(&current_population, &candidate)) {
+            return TSP_STATUS_INTERNAL_ERROR;
         }
-        consider_candidate(result, &candidate);
-        ++result->evaluated_tours;
+        consider_candidate(out_result, &candidate);
+        ++out_result->candidates_evaluated;
     }
 
-    if (config->verbose) {
-        const node *initial_best = heap_peek_min(&current_population);
-        printf("Generation 0 best: %.6f\n", initial_best->cost);
-    }
-
-    for (int generation = 1; generation <= config->generations; ++generation) {
-        node ranked[MAX_POPULATION];
+    for (int generation = 1;
+         generation <= config->generations;
+         ++generation) {
+        tsp_candidate ranked[TSP_MAX_POPULATION];
         for (int member = 0; member < config->population_size; ++member) {
-            if (!heap_delete_min(&current_population, &ranked[member])) {
-                return false;
+            if (!tsp_heap_delete_min(&current_population, &ranked[member])) {
+                return TSP_STATUS_INTERNAL_ERROR;
             }
         }
 
-        min_heap next_population;
-        heap_init(&next_population, (size_t)config->population_size);
+        tsp_min_heap next_population;
+        tsp_heap_init(&next_population, (size_t)config->population_size);
 
-        /* Elites retain both their route and the cost already calculated for it. */
+        /* Elites retain both their route and its previously calculated cost. */
         for (int elite = 0; elite < config->elite_count; ++elite) {
-            if (!heap_insert(&next_population, &ranked[elite])) {
-                return false;
+            if (!tsp_heap_insert(&next_population, &ranked[elite])) {
+                return TSP_STATUS_INTERNAL_ERROR;
             }
         }
 
@@ -317,33 +325,33 @@ bool evolutionary_search(const double cities[MAXNUM][MAXNUM],
              member < config->population_size;
              ++member) {
             const int parent_index = random_bounded(&random, parent_pool);
-            node child = ranked[parent_index];
+            tsp_candidate child = ranked[parent_index];
 
-            mutate_tour(child.tour,
-                        city_count,
-                        config->mutation_swaps,
-                        &random);
+            tsp_mutate_tour(child.tour,
+                            config->city_count,
+                            config->mutation_swaps,
+                            &random);
             /* Mutation changes the route, so its old fitness is discarded. */
-            child.cost = tour_cost(cities, child.tour, city_count);
+            child.cost =
+                tsp_tour_cost(graph, child.tour, config->city_count);
 
-            if (!tour_is_valid(child.tour, city_count) ||
-                !heap_insert(&next_population, &child)) {
-                return false;
+            if (!tsp_tour_is_valid(child.tour, config->city_count) ||
+                !tsp_heap_insert(&next_population, &child)) {
+                return TSP_STATUS_INTERNAL_ERROR;
             }
-            consider_candidate(result, &child);
-            ++result->evaluated_tours;
+            consider_candidate(out_result, &child);
+            ++out_result->candidates_evaluated;
         }
 
         current_population = next_population;
-        if (config->verbose) {
-            const node *generation_best = heap_peek_min(&current_population);
-            printf("Generation %d best: %.6f\n",
-                   generation,
-                   generation_best->cost);
-        }
     }
 
-    return current_population.size == (size_t)config->population_size &&
-           tour_is_valid(result->tour, result->city_count) &&
-           result->cost == tour_cost(cities, result->tour, result->city_count);
+    if (current_population.size != (size_t)config->population_size ||
+        !tsp_tour_is_valid(out_result->tour, out_result->city_count) ||
+        out_result->cost !=
+            tsp_tour_cost(graph, out_result->tour, out_result->city_count)) {
+        return TSP_STATUS_INTERNAL_ERROR;
+    }
+
+    return TSP_STATUS_OK;
 }
