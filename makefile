@@ -1,10 +1,13 @@
 CC ?= cc
+CXX ?= c++
 AR ?= ar
 CFLAGS ?= -O2 -g
+CXXFLAGS ?= -O2 -g
 ARFLAGS = rcs
 
 WARNINGS = -std=c11 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
 	-Wstrict-prototypes -Werror
+CXX_WARNINGS = -std=c++17 -Wall -Wextra -Wpedantic -Werror
 LDLIBS = -lm
 
 BUILD_DIR = build
@@ -18,7 +21,7 @@ CORE_OBJECTS = $(CORE_SOURCES:src/%.c=$(BUILD_DIR)/src/%.o)
 CLI_OBJECT = $(BUILD_DIR)/cli/main.o
 TEST_OBJECT = $(BUILD_DIR)/tests/tests.o
 
-.PHONY: all run test sanitize clean
+.PHONY: all run test sanitize fno-common cpp-check clean
 
 all: $(PROGRAM)
 
@@ -59,6 +62,16 @@ sanitize:
 		$(CORE_SOURCES) tests/tests.c -o $(SANITIZE_PROGRAM) $(LDLIBS)
 	./$(SANITIZE_PROGRAM)
 
+fno-common:
+	mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $(WARNINGS) -fno-common -Iinclude -Isrc \
+		$(CORE_SOURCES) tests/tests.c \
+		-o $(BUILD_DIR)/tsp-tests-fno-common $(LDLIBS)
+	./$(BUILD_DIR)/tsp-tests-fno-common
+
+cpp-check:
+	printf '%s\n' '#include <tsp/tsp.h>' 'int main() { return 0; }' | \
+		$(CXX) $(CXXFLAGS) $(CXX_WARNINGS) -Iinclude -x c++ -fsyntax-only -
 
 clean:
 	rm -rf $(BUILD_DIR)
