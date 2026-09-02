@@ -5,7 +5,7 @@
 #include <stdint.h>
 
 #include "graph.h"
-#include "queue.h"
+#include "heap.h"
 
 /* Exhaustive search is intentionally limited to small coursework examples. */
 #define MAX_EXACT_CITIES 12

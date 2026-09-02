@@ -1,5 +1,5 @@
-#include "function.h"
-#include "queue.h"
+#include "solver_internal.h"
+#include "heap.h"
 
 #include <math.h>
 #include <stdbool.h>

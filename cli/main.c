@@ -2,7 +2,7 @@
  Original tester/driver, retained as the command-line entry point.
 ***************************************************************/
 
-#include "function.h"
+#include "solver_internal.h"
 #include "graph.h"
 
 #include <errno.h>

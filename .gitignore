@@ -1,6 +1,7 @@
 .DS_Store
+/build/
 *.dSYM/
 *.o
-tsp
-tsp-tests
-tsp-tests-sanitize
+/tsp
+/tsp-tests
+/tsp-tests-sanitize

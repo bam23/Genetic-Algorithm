@@ -1,4 +1,4 @@
-#include "queue.h"
+#include "heap.h"
 
 static size_t parent(size_t index)
 {

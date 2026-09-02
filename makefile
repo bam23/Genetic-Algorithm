@@ -1,37 +1,51 @@
 CC ?= cc
+AR ?= ar
 CFLAGS ?= -O2 -g
+ARFLAGS = rcs
+
 WARNINGS = -std=c11 -Wall -Wextra -Wpedantic -Wconversion -Wshadow \
 	-Wstrict-prototypes -Werror
 LDLIBS = -lm
 
+BUILD_DIR = build
+LIBRARY = $(BUILD_DIR)/libtsp.a
 PROGRAM = tsp
 TEST_PROGRAM = tsp-tests
-COMMON_OBJECTS = graph.o function.o queue.o
+SANITIZE_PROGRAM = tsp-tests-sanitize
+
+CORE_SOURCES = src/graph.c src/solver.c src/heap.c
+CORE_OBJECTS = $(CORE_SOURCES:src/%.c=$(BUILD_DIR)/src/%.o)
+CLI_OBJECT = $(BUILD_DIR)/cli/main.o
+TEST_OBJECT = $(BUILD_DIR)/tests/tests.o
 
 .PHONY: all run test sanitize clean
 
 all: $(PROGRAM)
 
-$(PROGRAM): $(COMMON_OBJECTS) main.o
-	$(CC) $(CFLAGS) $(WARNINGS) -o $@ $^ $(LDLIBS)
+$(PROGRAM): $(CLI_OBJECT) $(LIBRARY)
+	$(CC) $(CFLAGS) $(WARNINGS) -o $@ $(CLI_OBJECT) $(LIBRARY) $(LDLIBS)
 
-$(TEST_PROGRAM): $(COMMON_OBJECTS) tests.o
-	$(CC) $(CFLAGS) $(WARNINGS) -o $@ $^ $(LDLIBS)
+$(LIBRARY): $(CORE_OBJECTS)
+	$(AR) $(ARFLAGS) $@ $^
 
-graph.o: graph.c graph.h
-	$(CC) $(CFLAGS) $(WARNINGS) -c graph.c
+$(BUILD_DIR)/src/%.o: src/%.c
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(WARNINGS) -Isrc -c $< -o $@
 
-function.o: function.c function.h graph.h queue.h
-	$(CC) $(CFLAGS) $(WARNINGS) -c function.c
+$(BUILD_DIR)/src/graph.o: src/graph.h
+$(BUILD_DIR)/src/solver.o: src/solver_internal.h src/graph.h src/heap.h
+$(BUILD_DIR)/src/heap.o: src/heap.h src/graph.h
 
-queue.o: queue.c queue.h graph.h
-	$(CC) $(CFLAGS) $(WARNINGS) -c queue.c
+$(CLI_OBJECT): cli/main.c src/solver_internal.h src/graph.h src/heap.h
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(WARNINGS) -Isrc -c $< -o $@
 
-main.o: main.c function.h graph.h queue.h
-	$(CC) $(CFLAGS) $(WARNINGS) -c main.c
+$(TEST_OBJECT): tests/tests.c src/solver_internal.h src/graph.h src/heap.h
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $(WARNINGS) -Isrc -c $< -o $@
 
-tests.o: tests.c function.h graph.h queue.h
-	$(CC) $(CFLAGS) $(WARNINGS) -c tests.c
+$(TEST_PROGRAM): $(TEST_OBJECT) $(LIBRARY)
+	$(CC) $(CFLAGS) $(WARNINGS) -o $@ $(TEST_OBJECT) $(LIBRARY) $(LDLIBS)
 
 run: $(PROGRAM)
 	./$(PROGRAM)
@@ -41,10 +55,12 @@ test: $(TEST_PROGRAM)
 
 sanitize:
 	$(CC) $(WARNINGS) -O1 -g -fsanitize=address,undefined \
-		-fno-omit-frame-pointer graph.c function.c queue.c tests.c \
-		-o $(TEST_PROGRAM)-sanitize $(LDLIBS)
-	./$(TEST_PROGRAM)-sanitize
+		-fno-omit-frame-pointer -Isrc $(CORE_SOURCES) tests/tests.c \
+		-o $(SANITIZE_PROGRAM) $(LDLIBS)
+	./$(SANITIZE_PROGRAM)
 
 clean:
-	rm -f *.o $(PROGRAM) $(TEST_PROGRAM) $(TEST_PROGRAM)-sanitize
-	rm -rf $(TEST_PROGRAM)-sanitize.dSYM
+	rm -rf $(BUILD_DIR)
+	rm -f *.o
+	rm -f $(PROGRAM) $(TEST_PROGRAM) $(SANITIZE_PROGRAM)
+	rm -rf $(SANITIZE_PROGRAM).dSYM

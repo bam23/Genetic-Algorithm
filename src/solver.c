@@ -1,4 +1,4 @@
-#include "function.h"
+#include "solver_internal.h"
 
 #include <float.h>
 #include <inttypes.h>
