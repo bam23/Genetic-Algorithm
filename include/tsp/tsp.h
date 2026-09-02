@@ -20,6 +20,7 @@ typedef enum tsp_status {
     TSP_STATUS_INVALID_DATA,
     TSP_STATUS_LIMIT_EXCEEDED,
     TSP_STATUS_ARITHMETIC_OVERFLOW,
+    TSP_STATUS_BUFFER_TOO_SMALL,
     TSP_STATUS_INTERNAL_ERROR
 } tsp_status;
 
@@ -60,6 +61,20 @@ typedef struct tsp_result {
     bool guaranteed_optimal;
 } tsp_result;
 
+/*
+ * Optional caller-owned storage for evolutionary convergence data. Entry i is
+ * the best known cost after generation i; entry 0 describes the initialized
+ * population. A non-NULL history requires a non-NULL best_costs pointer and a
+ * capacity of at least config->generations + 1. Insufficient capacity returns
+ * TSP_STATUS_BUFFER_TOO_SMALL before the solver runs. History is never
+ * partially reported: count is zero unless the solve succeeds.
+ */
+typedef struct tsp_convergence_history {
+    double *best_costs;
+    size_t capacity;
+    size_t count;
+} tsp_convergence_history;
+
 /* Load the coursework's fixed 20-city off-diagonal matrix format. */
 tsp_status tsp_graph_load(tsp_graph *out_graph, const char *path);
 
@@ -69,6 +84,7 @@ tsp_status tsp_solve_bruteforce(const tsp_graph *graph,
 
 tsp_status tsp_solve_evolutionary(const tsp_graph *graph,
                                   const tsp_evolution_config *config,
+                                  tsp_convergence_history *history,
                                   tsp_result *out_result);
 
 const char *tsp_status_string(tsp_status status);

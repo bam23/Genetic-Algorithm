@@ -22,6 +22,7 @@ typedef struct program_config {
     int mutation_swaps;
     uint32_t seed;
     const char *data_path;
+    bool verbose;
     bool print_graph;
 } program_config;
 
@@ -35,6 +36,7 @@ static void print_usage(const char *program)
     puts("  --mutation-swaps N  City swaps per generated child (1-N-1)");
     puts("  --seed N            Deterministic 32-bit random seed");
     puts("  --data PATH         Off-diagonal 20-city distance data");
+    puts("  --verbose           Print evolutionary convergence history");
     puts("  --print-graph       Print the selected adjacency matrix");
     puts("  --help              Show this message");
 }
@@ -81,6 +83,10 @@ static bool parse_arguments(int argc, char *argv[], program_config *config)
         if (strcmp(option, "--help") == 0) {
             print_usage(argv[0]);
             exit(EXIT_SUCCESS);
+        }
+        if (strcmp(option, "--verbose") == 0) {
+            config->verbose = true;
+            continue;
         }
         if (strcmp(option, "--print-graph") == 0) {
             config->print_graph = true;
@@ -185,6 +191,16 @@ static void print_result(const tsp_result *result)
            result->candidates_evaluated);
 }
 
+static void print_convergence(const tsp_convergence_history *history)
+{
+    puts("\nEvolutionary convergence");
+    for (size_t generation = 0U; generation < history->count; ++generation) {
+        printf("  Generation %zu best: %.6f\n",
+               generation,
+               history->best_costs[generation]);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     program_config config = {
@@ -195,6 +211,7 @@ int main(int argc, char *argv[])
         .mutation_swaps = 1,
         .seed = UINT32_C(12345),
         .data_path = "cities.dat",
+        .verbose = false,
         .print_graph = false
     };
 
@@ -247,15 +264,36 @@ int main(int argc, char *argv[])
         .seed = config.seed
     };
 
+    double *history_values = NULL;
+    tsp_convergence_history history = {
+        .best_costs = NULL,
+        .capacity = 0U,
+        .count = 0U
+    };
+    tsp_convergence_history *history_output = NULL;
+    if (config.verbose) {
+        history.capacity = (size_t)config.generations + (size_t)1U;
+        history_values =
+            malloc(history.capacity * sizeof(history_values[0]));
+        if (history_values == NULL) {
+            fputs("Error: could not allocate convergence history\n", stderr);
+            return EXIT_FAILURE;
+        }
+        history.best_costs = history_values;
+        history_output = &history;
+    }
+
     tsp_result evolutionary_result;
     const double evolutionary_start = current_time_seconds();
     status = tsp_solve_evolutionary(&graph,
                                     &evolution,
+                                    history_output,
                                     &evolutionary_result);
     if (status != TSP_STATUS_OK) {
         fprintf(stderr,
                 "Error: evolutionary search failed: %s\n",
                 tsp_status_string(status));
+        free(history_values);
         return EXIT_FAILURE;
     }
     const double evolutionary_elapsed =
@@ -287,5 +325,9 @@ int main(int argc, char *argv[])
                (difference / brute_force_result.cost) * 100.0);
     }
 
+    if (history_output != NULL) {
+        print_convergence(history_output);
+    }
+    free(history_values);
     return EXIT_SUCCESS;
 }

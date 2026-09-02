@@ -254,8 +254,12 @@ tsp_status tsp_solve_bruteforce(const tsp_graph *graph,
 
 tsp_status tsp_solve_evolutionary(const tsp_graph *graph,
                                   const tsp_evolution_config *config,
+                                  tsp_convergence_history *history,
                                   tsp_result *out_result)
 {
+    if (history != NULL) {
+        history->count = 0U;
+    }
     if (graph == NULL || config == NULL || out_result == NULL ||
         config->city_count < 3 ||
         config->population_size < 2 ||
@@ -270,6 +274,17 @@ tsp_status tsp_solve_evolutionary(const tsp_graph *graph,
         config->city_count > graph->city_count ||
         config->population_size > TSP_MAX_POPULATION) {
         return TSP_STATUS_LIMIT_EXCEEDED;
+    }
+
+    const size_t required_history =
+        (size_t)config->generations + (size_t)1U;
+    if (history != NULL) {
+        if (history->best_costs == NULL) {
+            return TSP_STATUS_INVALID_ARGUMENT;
+        }
+        if (history->capacity < required_history) {
+            return TSP_STATUS_BUFFER_TOO_SMALL;
+        }
     }
 
     initialize_result(out_result,
@@ -294,6 +309,10 @@ tsp_status tsp_solve_evolutionary(const tsp_graph *graph,
         }
         consider_candidate(out_result, &candidate);
         ++out_result->candidates_evaluated;
+    }
+
+    if (history != NULL) {
+        history->best_costs[0] = out_result->cost;
     }
 
     for (int generation = 1;
@@ -344,6 +363,9 @@ tsp_status tsp_solve_evolutionary(const tsp_graph *graph,
         }
 
         current_population = next_population;
+        if (history != NULL) {
+            history->best_costs[(size_t)generation] = out_result->cost;
+        }
     }
 
     if (current_population.size != (size_t)config->population_size ||
@@ -353,5 +375,8 @@ tsp_status tsp_solve_evolutionary(const tsp_graph *graph,
         return TSP_STATUS_INTERNAL_ERROR;
     }
 
+    if (history != NULL) {
+        history->count = required_history;
+    }
     return TSP_STATUS_OK;
 }

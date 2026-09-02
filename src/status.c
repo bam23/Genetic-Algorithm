@@ -15,6 +15,8 @@ const char *tsp_status_string(tsp_status status)
         return "configured limit exceeded";
     case TSP_STATUS_ARITHMETIC_OVERFLOW:
         return "arithmetic overflow";
+    case TSP_STATUS_BUFFER_TOO_SMALL:
+        return "convergence-history buffer too small";
     case TSP_STATUS_INTERNAL_ERROR:
         return "internal solver error";
     default:

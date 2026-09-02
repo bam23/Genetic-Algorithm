@@ -144,9 +144,11 @@ static bool test_deterministic_evolution(void)
 
     CHECK(tsp_solve_evolutionary(&graph,
                                  &config,
+                                 NULL,
                                  &first) == TSP_STATUS_OK);
     CHECK(tsp_solve_evolutionary(&graph,
                                  &config,
+                                 NULL,
                                  &second) == TSP_STATUS_OK);
     CHECK(nearly_equal(first.cost, second.cost));
     CHECK(memcmp(first.tour,
@@ -174,6 +176,7 @@ static bool test_heuristic_fitness_matches_route(void)
 
     CHECK(tsp_solve_evolutionary(&graph,
                                  &config,
+                                 NULL,
                                  &result) == TSP_STATUS_OK);
     CHECK(tsp_tour_is_valid(result.tour, result.city_count));
     CHECK(nearly_equal(result.cost,
