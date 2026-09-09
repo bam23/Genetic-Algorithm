@@ -44,6 +44,24 @@
         "BUILD_TESTING": "OFF",
         "TSP_ENABLE_CPP_CHECK": "ON"
       }
+    },
+    {
+      "name": "desktop",
+      "displayName": "Desktop adapter development",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/desktop",
+      "cacheVariables": {
+        "TSP_BUILD_DESKTOP": "ON"
+      }
+    },
+    {
+      "name": "desktop-sanitize",
+      "displayName": "Sanitized desktop adapter verification",
+      "inherits": "sanitize",
+      "binaryDir": "${sourceDir}/build/desktop-sanitize",
+      "cacheVariables": {
+        "TSP_BUILD_DESKTOP": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -66,6 +84,16 @@
       "name": "cpp-check",
       "configurePreset": "cpp-check",
       "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "desktop",
+      "configurePreset": "desktop",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "desktop-sanitize",
+      "configurePreset": "desktop-sanitize",
+      "configuration": "Debug"
     }
   ],
   "testPresets": [
@@ -89,6 +117,22 @@
       "name": "fno-common",
       "configurePreset": "fno-common",
       "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "desktop",
+      "configurePreset": "desktop",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "desktop-sanitize",
+      "configurePreset": "desktop-sanitize",
+      "configuration": "Debug",
       "output": {
         "outputOnFailure": true
       }

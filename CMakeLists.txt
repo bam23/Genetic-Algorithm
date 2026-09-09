@@ -13,10 +13,15 @@ option(TSP_ENABLE_FNO_COMMON
 option(TSP_ENABLE_CPP_CHECK
        "Build a C++17 translation unit that includes the public C API"
        OFF)
+option(TSP_BUILD_DESKTOP
+       "Build the optional C++ desktop adapter and its tests"
+       OFF)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
+
+set(TSP_SANITIZER_FLAG -fsanitize=address,undefined)
 
 function(tsp_enable_c_warnings target)
     if(MSVC)
@@ -36,9 +41,9 @@ function(tsp_enable_c_warnings target)
     endif()
 endfunction()
 
-function(tsp_enable_c_verification target)
+function(tsp_enable_sanitizer_instrumentation target compiler_id)
     if(TSP_ENABLE_SANITIZERS)
-        if(MSVC OR NOT CMAKE_C_COMPILER_ID MATCHES "^(AppleClang|Clang|GNU)$")
+        if(MSVC OR NOT "${compiler_id}" MATCHES "^(AppleClang|Clang|GNU)$")
             message(
                 FATAL_ERROR
                 "TSP_ENABLE_SANITIZERS requires AppleClang, Clang, or GCC with a GNU-compatible frontend"
@@ -48,10 +53,17 @@ function(tsp_enable_c_verification target)
             ${target}
             PRIVATE
                 -O1
-                -fsanitize=address,undefined
+                ${TSP_SANITIZER_FLAG}
                 -fno-omit-frame-pointer
         )
     endif()
+endfunction()
+
+function(tsp_enable_c_verification target)
+    tsp_enable_sanitizer_instrumentation(
+        ${target}
+        "${CMAKE_C_COMPILER_ID}"
+    )
 
     if(TSP_ENABLE_FNO_COMMON)
         if(MSVC OR NOT CMAKE_C_COMPILER_ID MATCHES "^(AppleClang|Clang|GNU)$")
@@ -61,6 +73,17 @@ function(tsp_enable_c_verification target)
             )
         endif()
         target_compile_options(${target} PRIVATE -fno-common)
+    endif()
+endfunction()
+
+function(tsp_enable_cxx_warnings target)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /WX)
+    else()
+        target_compile_options(
+            ${target}
+            PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror
+        )
     endif()
 endfunction()
 
@@ -85,7 +108,7 @@ tsp_enable_c_warnings(tsp_core)
 tsp_enable_c_verification(tsp_core)
 
 if(TSP_ENABLE_SANITIZERS)
-    target_link_options(tsp_core INTERFACE -fsanitize=address,undefined)
+    target_link_options(tsp_core INTERFACE ${TSP_SANITIZER_FLAG})
 endif()
 
 if(UNIX)
@@ -112,12 +135,18 @@ if(BUILD_TESTING)
     )
 endif()
 
-if(TSP_ENABLE_CPP_CHECK)
+if(TSP_BUILD_DESKTOP OR TSP_ENABLE_CPP_CHECK)
     enable_language(CXX)
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)
+endif()
 
+if(TSP_BUILD_DESKTOP)
+    add_subdirectory(gui)
+endif()
+
+if(TSP_ENABLE_CPP_CHECK)
     file(
         GENERATE
         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/cpp-header-check.cpp"
@@ -132,12 +161,5 @@ if(TSP_ENABLE_CPP_CHECK)
         tsp_cpp_header_check
         PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
-    if(MSVC)
-        target_compile_options(tsp_cpp_header_check PRIVATE /W4 /WX)
-    else()
-        target_compile_options(
-            tsp_cpp_header_check
-            PRIVATE -Wall -Wextra -Wpedantic -Werror
-        )
-    endif()
+    tsp_enable_cxx_warnings(tsp_cpp_header_check)
 endif()
