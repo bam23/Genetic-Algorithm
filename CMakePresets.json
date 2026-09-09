@@ -1,0 +1,97 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Core development",
+      "description": "Build the C core, CLI, and tests without GUI dependencies",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "BUILD_TESTING": "ON"
+      }
+    },
+    {
+      "name": "sanitize",
+      "displayName": "Sanitizer verification",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/sanitize",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "TSP_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "fno-common",
+      "displayName": "No-common verification",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/fno-common",
+      "cacheVariables": {
+        "TSP_ENABLE_FNO_COMMON": "ON"
+      }
+    },
+    {
+      "name": "cpp-check",
+      "displayName": "C++17 public-header verification",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/cpp-check",
+      "cacheVariables": {
+        "BUILD_TESTING": "OFF",
+        "TSP_ENABLE_CPP_CHECK": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
+      "configuration": "Debug"
+    },
+    {
+      "name": "fno-common",
+      "configurePreset": "fno-common",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "cpp-check",
+      "configurePreset": "cpp-check",
+      "configuration": "RelWithDebInfo"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "default",
+      "configurePreset": "default",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "fno-common",
+      "configurePreset": "fno-common",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

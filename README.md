@@ -145,8 +145,24 @@ same routes and costs.
 
 ## Build and Run
 
-Requirements are a C11 compiler such as Clang or GCC, Make, and a POSIX-like
-environment.
+Requirements are CMake 3.21 or newer and a C11 compiler such as Clang, GCC, or
+MSVC. CMake is the canonical build definition and supports a core-only build
+without GUI dependencies:
+
+```bash
+cmake --preset default
+cmake --build --preset default
+ctest --preset default
+./build/tsp
+```
+
+Single-configuration generators commonly place the executable at `build/tsp`.
+Multi-configuration generators such as Visual Studio place it in a
+configuration subdirectory, for example `build/RelWithDebInfo/`.
+
+The existing Make commands remain available as a compatibility workflow on a
+POSIX-like environment. They configure and invoke the corresponding CMake
+targets while preserving the root-level `./tsp` executable:
 
 ```bash
 make           # Build tsp with strict warnings enabled
