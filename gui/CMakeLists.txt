@@ -42,8 +42,15 @@ if(TSP_BUILD_GUI)
         main.cpp
         main_window.cpp
         main_window.hpp
+        solver_worker.cpp
+        solver_worker.hpp
     )
-    set_target_properties(tsp_desktop PROPERTIES OUTPUT_NAME tsp-desktop)
+    set_target_properties(
+        tsp_desktop
+        PROPERTIES
+            AUTOMOC ON
+            OUTPUT_NAME tsp-desktop
+    )
     target_link_libraries(
         tsp_desktop
         PRIVATE
