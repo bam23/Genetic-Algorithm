@@ -39,6 +39,8 @@ if(TSP_BUILD_GUI)
 
     add_executable(
         tsp_desktop
+        convergence_view.cpp
+        convergence_view.hpp
         main.cpp
         main_window.cpp
         main_window.hpp

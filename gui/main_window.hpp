@@ -23,6 +23,8 @@ QT_END_NAMESPACE
 
 namespace tsp::desktop {
 
+class ConvergenceView;
+
 class MainWindow final : public QMainWindow {
     Q_OBJECT
 
@@ -99,6 +101,7 @@ private:
     QLabel *exact_result_label_ = nullptr;
     QLabel *evolutionary_result_label_ = nullptr;
     QLabel *comparison_result_label_ = nullptr;
+    ConvergenceView *convergence_view_ = nullptr;
     QPushButton *run_exact_ = nullptr;
     QPushButton *run_evolutionary_ = nullptr;
     QPushButton *run_comparison_ = nullptr;

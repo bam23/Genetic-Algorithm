@@ -1,5 +1,7 @@
 #include "main_window.hpp"
 
+#include "convergence_view.hpp"
+
 #include <tsp/tsp.h>
 
 #include <QByteArray>
@@ -251,13 +253,15 @@ void MainWindow::build_interface()
                           results),
         0,
         0);
-    results_layout->addWidget(
+    auto *evolutionary_group =
         make_result_group(tr("Evolutionary"),
                           QStringLiteral("evolutionaryResult"),
                           evolutionary_result_label_,
-                          results),
-        0,
-        1);
+                          results);
+    convergence_view_ = new ConvergenceView(evolutionary_group);
+    convergence_view_->setObjectName(QStringLiteral("convergenceView"));
+    evolutionary_group->layout()->addWidget(convergence_view_);
+    results_layout->addWidget(evolutionary_group, 0, 1);
     results_layout->addWidget(
         make_result_group(tr("Comparison summary"),
                           QStringLiteral("comparisonResult"),
@@ -484,6 +488,7 @@ void MainWindow::clear_results()
     exact_result_data_.reset();
     evolutionary_result_data_.reset();
     comparison_.reset();
+    convergence_view_->clear_history();
 
     for (auto *label : { exact_result_label_,
                          evolutionary_result_label_,
@@ -597,6 +602,8 @@ void MainWindow::handle_job_completed(SolverJobCompletion completion)
         finish_workflow();
     } else if (workflow_state_ == WorkflowState::EvolutionaryRunning) {
         evolutionary_result_data_.emplace(std::move(result));
+        convergence_view_->set_history(
+            evolutionary_result_data_->convergence);
         show_result(evolutionary_result_label_, *evolutionary_result_data_);
         statusBar()->showMessage(tr("Evolutionary solver finished."));
         finish_workflow();
@@ -610,6 +617,8 @@ void MainWindow::handle_job_completed(SolverJobCompletion completion)
                    comparison_->settings);
     } else {
         evolutionary_result_data_.emplace(std::move(result));
+        convergence_view_->set_history(
+            evolutionary_result_data_->convergence);
         show_result(evolutionary_result_label_,
                     *evolutionary_result_data_);
         show_comparison_summary();
