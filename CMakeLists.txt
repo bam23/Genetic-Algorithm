@@ -16,6 +16,9 @@ option(TSP_ENABLE_CPP_CHECK
 option(TSP_BUILD_DESKTOP
        "Build the optional C++ desktop adapter and its tests"
        OFF)
+option(TSP_BUILD_GUI
+       "Build the Qt 6 Widgets desktop application"
+       OFF)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -135,14 +138,14 @@ if(BUILD_TESTING)
     )
 endif()
 
-if(TSP_BUILD_DESKTOP OR TSP_ENABLE_CPP_CHECK)
+if(TSP_BUILD_DESKTOP OR TSP_BUILD_GUI OR TSP_ENABLE_CPP_CHECK)
     enable_language(CXX)
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)
 endif()
 
-if(TSP_BUILD_DESKTOP)
+if(TSP_BUILD_DESKTOP OR TSP_BUILD_GUI)
     add_subdirectory(gui)
 endif()
 

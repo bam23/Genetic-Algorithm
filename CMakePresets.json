@@ -62,6 +62,15 @@
       "cacheVariables": {
         "TSP_BUILD_DESKTOP": "ON"
       }
+    },
+    {
+      "name": "gui",
+      "displayName": "Qt 6 Widgets desktop application",
+      "inherits": "default",
+      "binaryDir": "${sourceDir}/build/gui",
+      "cacheVariables": {
+        "TSP_BUILD_GUI": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -94,6 +103,11 @@
       "name": "desktop-sanitize",
       "configurePreset": "desktop-sanitize",
       "configuration": "Debug"
+    },
+    {
+      "name": "gui",
+      "configurePreset": "gui",
+      "configuration": "RelWithDebInfo"
     }
   ],
   "testPresets": [
@@ -133,6 +147,14 @@
       "name": "desktop-sanitize",
       "configurePreset": "desktop-sanitize",
       "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "gui",
+      "configurePreset": "gui",
+      "configuration": "RelWithDebInfo",
       "output": {
         "outputOnFailure": true
       }

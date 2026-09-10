@@ -33,3 +33,39 @@ if(BUILD_TESTING)
         PROPERTIES WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     )
 endif()
+
+if(TSP_BUILD_GUI)
+    find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+
+    add_executable(
+        tsp_desktop
+        main.cpp
+        main_window.cpp
+        main_window.hpp
+    )
+    set_target_properties(tsp_desktop PROPERTIES OUTPUT_NAME tsp-desktop)
+    target_link_libraries(
+        tsp_desktop
+        PRIVATE
+            tsp_desktop_adapter
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Widgets
+    )
+    target_compile_features(tsp_desktop PRIVATE cxx_std_17)
+    tsp_enable_cxx_warnings(tsp_desktop)
+    tsp_enable_sanitizer_instrumentation(
+        tsp_desktop
+        "${CMAKE_CXX_COMPILER_ID}"
+    )
+
+    add_custom_command(
+        TARGET tsp_desktop
+        POST_BUILD
+        COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different
+            "${PROJECT_SOURCE_DIR}/cities.dat"
+            "$<TARGET_FILE_DIR:tsp_desktop>/cities.dat"
+        VERBATIM
+    )
+endif()
