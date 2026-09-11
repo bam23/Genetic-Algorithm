@@ -6,6 +6,7 @@
 #include <QMainWindow>
 #include <QThread>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 
@@ -24,6 +25,7 @@ QT_END_NAMESPACE
 namespace tsp::desktop {
 
 class ConvergenceView;
+class RouteView;
 
 class MainWindow final : public QMainWindow {
     Q_OBJECT
@@ -68,8 +70,12 @@ private:
                     const RunSettings &settings);
     void handle_job_completed(SolverJobCompletion completion);
     void finish_workflow();
-    void show_result(QLabel *label, const SolverResult &result);
-    void show_error(QLabel *label, const AdapterError &error);
+    void show_result(QLabel *label,
+                     RouteView *route_view,
+                     const SolverResult &result);
+    void show_error(QLabel *label,
+                    RouteView *route_view,
+                    const AdapterError &error);
     void show_comparison_summary();
     void set_busy_message(const QString &message);
     RunSettings settings_snapshot() const;
@@ -85,6 +91,7 @@ private:
     WorkflowState workflow_state_ = WorkflowState::Idle;
     std::uint64_t next_job_id_ = 1U;
     std::uint64_t active_job_id_ = 0U;
+    std::size_t active_city_count_ = 0U;
     bool pending_close_ = false;
     QGroupBox *configuration_group_ = nullptr;
     QSpinBox *city_count_ = nullptr;
@@ -101,6 +108,8 @@ private:
     QLabel *exact_result_label_ = nullptr;
     QLabel *evolutionary_result_label_ = nullptr;
     QLabel *comparison_result_label_ = nullptr;
+    RouteView *exact_route_view_ = nullptr;
+    RouteView *evolutionary_route_view_ = nullptr;
     ConvergenceView *convergence_view_ = nullptr;
     QPushButton *run_exact_ = nullptr;
     QPushButton *run_evolutionary_ = nullptr;

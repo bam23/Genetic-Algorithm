@@ -44,6 +44,8 @@ if(TSP_BUILD_GUI)
         main.cpp
         main_window.cpp
         main_window.hpp
+        route_view.cpp
+        route_view.hpp
         solver_worker.cpp
         solver_worker.hpp
     )

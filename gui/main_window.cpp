@@ -1,6 +1,7 @@
 #include "main_window.hpp"
 
 #include "convergence_view.hpp"
+#include "route_view.hpp"
 
 #include <tsp/tsp.h>
 
@@ -18,6 +19,7 @@
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QScrollArea>
 #include <QSpinBox>
 #include <QStatusBar>
 #include <QString>
@@ -141,9 +143,13 @@ MainWindow::~MainWindow()
 void MainWindow::build_interface()
 {
     setWindowTitle(tr("Traveling Salesman Problem"));
-    resize(820, 720);
+    resize(1080, 900);
 
-    auto *central = new QWidget(this);
+    auto *scroll_area = new QScrollArea(this);
+    scroll_area->setObjectName(QStringLiteral("mainScrollArea"));
+    scroll_area->setWidgetResizable(true);
+
+    auto *central = new QWidget(scroll_area);
     auto *root_layout = new QVBoxLayout(central);
     root_layout->setContentsMargins(16, 16, 16, 16);
     root_layout->setSpacing(12);
@@ -246,28 +252,48 @@ void MainWindow::build_interface()
 
     auto *results = new QGroupBox(tr("Results"), central);
     auto *results_layout = new QGridLayout(results);
-    results_layout->addWidget(
+
+    auto *route_note = new QLabel(
+        tr("Schematic layout; screen distance does not represent route cost."),
+        results);
+    route_note->setObjectName(QStringLiteral("routeDisclaimer"));
+    route_note->setAlignment(Qt::AlignCenter);
+    route_note->setWordWrap(true);
+    results_layout->addWidget(route_note, 0, 0, 1, 2);
+
+    auto *exact_group =
         make_result_group(tr("Exact"),
                           QStringLiteral("exactResult"),
                           exact_result_label_,
-                          results),
-        0,
-        0);
+                          results);
+    exact_route_view_ = new RouteView(exact_group);
+    exact_route_view_->setObjectName(QStringLiteral("exactRouteView"));
+    exact_route_view_->setAccessibleName(tr("Exact route visualization"));
+    exact_group->layout()->addWidget(exact_route_view_);
+    results_layout->addWidget(exact_group, 1, 0);
+
     auto *evolutionary_group =
         make_result_group(tr("Evolutionary"),
                           QStringLiteral("evolutionaryResult"),
                           evolutionary_result_label_,
                           results);
-    convergence_view_ = new ConvergenceView(evolutionary_group);
+    evolutionary_route_view_ = new RouteView(evolutionary_group);
+    evolutionary_route_view_->setObjectName(
+        QStringLiteral("evolutionaryRouteView"));
+    evolutionary_route_view_->setAccessibleName(
+        tr("Evolutionary route visualization"));
+    evolutionary_group->layout()->addWidget(evolutionary_route_view_);
+    results_layout->addWidget(evolutionary_group, 1, 1);
+
+    convergence_view_ = new ConvergenceView(results);
     convergence_view_->setObjectName(QStringLiteral("convergenceView"));
-    evolutionary_group->layout()->addWidget(convergence_view_);
-    results_layout->addWidget(evolutionary_group, 0, 1);
+    results_layout->addWidget(convergence_view_, 2, 0, 1, 2);
     results_layout->addWidget(
         make_result_group(tr("Comparison summary"),
                           QStringLiteral("comparisonResult"),
                           comparison_result_label_,
                           results),
-        1,
+        3,
         0,
         1,
         2);
@@ -276,7 +302,8 @@ void MainWindow::build_interface()
     root_layout->addWidget(results);
     root_layout->addStretch();
 
-    setCentralWidget(central);
+    scroll_area->setWidget(central);
+    setCentralWidget(scroll_area);
     statusBar()->showMessage(tr("Idle — ready to run a solver."));
 
     connect(population_size_,
@@ -488,6 +515,9 @@ void MainWindow::clear_results()
     exact_result_data_.reset();
     evolutionary_result_data_.reset();
     comparison_.reset();
+    active_city_count_ = 0U;
+    exact_route_view_->clear_route();
+    evolutionary_route_view_->clear_route();
     convergence_view_->clear_history();
 
     for (auto *label : { exact_result_label_,
@@ -550,6 +580,9 @@ void MainWindow::submit_job(SolverOperation operation,
                             const RunSettings &settings)
 {
     active_job_id_ = next_job_id_++;
+    active_city_count_ = settings.city_count > 0
+                             ? static_cast<std::size_t>(settings.city_count)
+                             : 0U;
     emit job_requested(
         SolverJobRequest{ active_job_id_, operation, graph, settings });
 }
@@ -571,17 +604,21 @@ void MainWindow::handle_job_completed(SolverJobCompletion completion)
 
     if (auto *error = std::get_if<AdapterError>(&completion.outcome)) {
         if (workflow_state_ == WorkflowState::ExactRunning) {
-            show_error(exact_result_label_, *error);
+            show_error(exact_result_label_, exact_route_view_, *error);
         } else if (workflow_state_ == WorkflowState::EvolutionaryRunning) {
-            show_error(evolutionary_result_label_, *error);
+            show_error(evolutionary_result_label_,
+                       evolutionary_route_view_,
+                       *error);
         } else if (workflow_state_ == WorkflowState::ComparisonExactRunning) {
-            show_error(exact_result_label_, *error);
+            show_error(exact_result_label_, exact_route_view_, *error);
             comparison_result_label_->setText(
                 tr("Comparison stopped because the exact solver failed."));
             comparison_result_label_->setStyleSheet(
                 QStringLiteral("QLabel { color: #a4262c; }"));
         } else {
-            show_error(evolutionary_result_label_, *error);
+            show_error(evolutionary_result_label_,
+                       evolutionary_route_view_,
+                       *error);
             comparison_result_label_->setText(
                 tr("Comparison incomplete because the evolutionary solver "
                    "failed. The exact result remains valid."));
@@ -597,19 +634,25 @@ void MainWindow::handle_job_completed(SolverJobCompletion completion)
         std::move(std::get<SolverResult>(completion.outcome));
     if (workflow_state_ == WorkflowState::ExactRunning) {
         exact_result_data_.emplace(std::move(result));
-        show_result(exact_result_label_, *exact_result_data_);
+        show_result(exact_result_label_,
+                    exact_route_view_,
+                    *exact_result_data_);
         statusBar()->showMessage(tr("Exact solver finished."));
         finish_workflow();
     } else if (workflow_state_ == WorkflowState::EvolutionaryRunning) {
         evolutionary_result_data_.emplace(std::move(result));
         convergence_view_->set_history(
             evolutionary_result_data_->convergence);
-        show_result(evolutionary_result_label_, *evolutionary_result_data_);
+        show_result(evolutionary_result_label_,
+                    evolutionary_route_view_,
+                    *evolutionary_result_data_);
         statusBar()->showMessage(tr("Evolutionary solver finished."));
         finish_workflow();
     } else if (workflow_state_ == WorkflowState::ComparisonExactRunning) {
         exact_result_data_.emplace(std::move(result));
-        show_result(exact_result_label_, *exact_result_data_);
+        show_result(exact_result_label_,
+                    exact_route_view_,
+                    *exact_result_data_);
         workflow_state_ = WorkflowState::ComparisonEvolutionaryRunning;
         set_busy_message(tr("Running comparison: evolutionary solver..."));
         submit_job(SolverOperation::Evolutionary,
@@ -620,6 +663,7 @@ void MainWindow::handle_job_completed(SolverJobCompletion completion)
         convergence_view_->set_history(
             evolutionary_result_data_->convergence);
         show_result(evolutionary_result_label_,
+                    evolutionary_route_view_,
                     *evolutionary_result_data_);
         show_comparison_summary();
         statusBar()->showMessage(tr("Comparison finished."));
@@ -648,15 +692,21 @@ void MainWindow::finish_workflow()
     update_run_availability();
 }
 
-void MainWindow::show_result(QLabel *label, const SolverResult &result)
+void MainWindow::show_result(QLabel *label,
+                             RouteView *route_view,
+                             const SolverResult &result)
 {
+    route_view->set_route(result.route, active_city_count_);
     label->setText(formatted_result(result));
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     label->setStyleSheet({});
 }
 
-void MainWindow::show_error(QLabel *label, const AdapterError &error)
+void MainWindow::show_error(QLabel *label,
+                            RouteView *route_view,
+                            const AdapterError &error)
 {
+    route_view->clear_route();
     label->setText(formatted_error(error));
     label->setAlignment(Qt::AlignLeft | Qt::AlignTop);
     label->setStyleSheet(QStringLiteral("QLabel { color: #a4262c; }"));
