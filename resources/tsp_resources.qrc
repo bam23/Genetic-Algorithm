@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="icons/tsp-app-icon.png">icons/tsp-app-icon-256.png</file>
+    </qresource>
+</RCC>

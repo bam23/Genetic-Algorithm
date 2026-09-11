@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
+#include <time.h>
 
 typedef struct program_config {
     int city_count;
@@ -163,11 +163,11 @@ static bool parse_arguments(int argc, char *argv[], program_config *config)
 
 static double current_time_seconds(void)
 {
-    struct timeval time_value;
-    if (gettimeofday(&time_value, NULL) != 0) {
+    struct timespec time_value;
+    if (timespec_get(&time_value, TIME_UTC) != TIME_UTC) {
         return 0.0;
     }
-    return (double)time_value.tv_sec + ((double)time_value.tv_usec / 1000000.0);
+    return (double)time_value.tv_sec + ((double)time_value.tv_nsec / 1000000000.0);
 }
 
 static void print_graph(const tsp_graph *graph, int city_count)

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(tsp VERSION 1.1.0 LANGUAGES C)
+project(tsp VERSION 1.2.0 LANGUAGES C)
 
 include(CTest)
 
@@ -109,6 +109,10 @@ target_include_directories(
 )
 tsp_enable_c_warnings(tsp_core)
 tsp_enable_c_verification(tsp_core)
+
+if(MSVC)
+    target_compile_definitions(tsp_core PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
 
 if(TSP_ENABLE_SANITIZERS)
     target_link_options(tsp_core INTERFACE ${TSP_SANITIZER_FLAG})

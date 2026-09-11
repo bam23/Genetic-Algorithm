@@ -37,8 +37,44 @@ endif()
 if(TSP_BUILD_GUI)
     find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 
-    add_executable(
+    set(tsp_desktop_platform_sources)
+    if(APPLE)
+        set(tsp_macos_icon
+            "${PROJECT_SOURCE_DIR}/resources/icons/tsp-app-icon.icns"
+        )
+        set_source_files_properties(
+            "${tsp_macos_icon}"
+            PROPERTIES MACOSX_PACKAGE_LOCATION Resources
+        )
+        list(APPEND tsp_desktop_platform_sources "${tsp_macos_icon}")
+    elseif(WIN32)
+        file(
+            TO_CMAKE_PATH
+            "${PROJECT_SOURCE_DIR}/resources/icons/tsp-app-icon.ico"
+            TSP_WINDOWS_ICON_PATH
+        )
+        configure_file(
+            "${PROJECT_SOURCE_DIR}/resources/windows/tsp-app.rc.in"
+            "${CMAKE_CURRENT_BINARY_DIR}/tsp-app.rc"
+            @ONLY
+        )
+        set_property(
+            SOURCE "${CMAKE_CURRENT_BINARY_DIR}/tsp-app.rc"
+            APPEND
+            PROPERTY OBJECT_DEPENDS
+                     "${PROJECT_SOURCE_DIR}/resources/icons/tsp-app-icon.ico"
+        )
+        list(
+            APPEND
+            tsp_desktop_platform_sources
+            "${CMAKE_CURRENT_BINARY_DIR}/tsp-app.rc"
+        )
+    endif()
+
+    qt_add_executable(
         tsp_desktop
+        WIN32
+        MACOSX_BUNDLE
         convergence_view.cpp
         convergence_view.hpp
         main.cpp
@@ -48,11 +84,19 @@ if(TSP_BUILD_GUI)
         route_view.hpp
         solver_worker.cpp
         solver_worker.hpp
+        "${PROJECT_SOURCE_DIR}/resources/tsp_resources.qrc"
+        ${tsp_desktop_platform_sources}
     )
     set_target_properties(
         tsp_desktop
         PROPERTIES
             AUTOMOC ON
+            AUTORCC ON
+            MACOSX_BUNDLE_BUNDLE_NAME "Traveling Salesman Problem"
+            MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "com.bam23.tsp"
+            MACOSX_BUNDLE_ICON_FILE "tsp-app-icon.icns"
+            MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
             OUTPUT_NAME tsp-desktop
     )
     target_link_libraries(

@@ -1,0 +1,54 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Configure core
+        run: >-
+          cmake -S . -B build/core
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DBUILD_TESTING=ON
+
+      - name: Build core
+        run: cmake --build build/core --config RelWithDebInfo
+
+      - name: Test core
+        run: ctest --test-dir build/core -C RelWithDebInfo --output-on-failure
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          cache: true
+
+      - name: Configure desktop GUI
+        run: >-
+          cmake -S . -B build/gui
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DBUILD_TESTING=ON
+          -DTSP_BUILD_GUI=ON
+
+      - name: Build desktop GUI
+        run: cmake --build build/gui --config RelWithDebInfo
+
+      - name: Test desktop layers
+        run: ctest --test-dir build/gui -C RelWithDebInfo --output-on-failure

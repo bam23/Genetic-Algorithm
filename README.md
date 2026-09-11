@@ -1,9 +1,59 @@
-# Traveling Salesman Problem: Brute-Force and Evolutionary Search in C
+# Traveling Salesman Problem: C Core, CLI, and Qt Desktop App
 
-A C11 implementation of the Traveling Salesman Problem (TSP) that compares a
-brute-force exhaustive solver with a deterministic mutation-and-elitism
-evolutionary search. The project emphasizes algorithms and data structures
-implemented directly in C rather than external libraries.
+[![Build](https://github.com/bam23/Genetic-Algorithm/actions/workflows/build.yml/badge.svg)](https://github.com/bam23/Genetic-Algorithm/actions/workflows/build.yml)
+
+A C11 implementation of the Traveling Salesman Problem (TSP), with a supported
+command-line client and a C++17/Qt 6 desktop application. Both clients compare
+a brute-force exhaustive solver with a deterministic mutation-and-elitism
+evolutionary search. The algorithms and data structures remain implemented in
+the reusable C core library.
+
+## Quick Start
+
+### Desktop application
+
+The desktop application requires CMake 3.21 or newer, Qt 6, and a C/C++
+compiler. It can run either solver, compare their results, chart evolutionary
+convergence, and display both directed tours on the same schematic layout.
+Exact search is intentionally limited to 12 cities because its search space
+grows factorially.
+
+```bash
+git clone https://github.com/bam23/Genetic-Algorithm.git
+cd Genetic-Algorithm
+cmake --preset gui
+cmake --build --preset gui
+```
+
+Launch the application from a single-configuration development build:
+
+```bash
+# macOS
+open build/gui/gui/tsp-desktop.app
+
+# Linux
+./build/gui/gui/tsp-desktop
+```
+
+With a Visual Studio multi-configuration build, launch the Windows executable
+from the selected configuration directory:
+
+```powershell
+.\build\gui\gui\RelWithDebInfo\tsp-desktop.exe
+```
+
+The route views are schematic: screen distance does not represent route cost.
+
+### Command-line interface
+
+The CLI remains permanently supported and requires no Qt installation:
+
+```bash
+make
+make run
+```
+
+The CMake-only CLI workflow is documented in [Build and Run](#build-and-run).
 
 ## What This Demonstrates
 
@@ -33,26 +83,30 @@ baseline for evaluating the heuristic.
 
 ## Architecture
 
-The presentation-independent algorithms are built as a reusable C library.
-The command-line program includes only the public API at `include/tsp/tsp.h`
-and links against `build/libtsp.a`:
-
-```text
-C Core Library
-    └── C CLI
-```
-
-A later phase may add a cross-platform C++ desktop visualization that consumes
-the same C API:
+The presentation-independent algorithms are built once as a reusable C
+library. Both clients consume that implementation through the public API at
+`include/tsp/tsp.h`:
 
 ```text
 C Core Library
     ├── C CLI
-    └── C++ Desktop Visualization (planned, not implemented)
+    └── C++/Qt Desktop Application
+        ├── Private C++ adapter
+        ├── Background solver worker
+        ├── Convergence visualization
+        └── Directed route visualization
 ```
 
-The core algorithms remain implemented in C. See [ROADMAP.md](ROADMAP.md) for
-the planned project evolution.
+The GUI uses one background worker thread so solver execution does not block
+the interface. The adapter, worker, and visualizations do not reimplement the
+algorithms. Qt remains optional: the default CMake configuration builds only
+the C library, CLI, and C tests. See [ROADMAP.md](ROADMAP.md) for the project
+evolution.
+
+The canonical application artwork is
+`resources/icons/tsp-app-icon-master.png`. The committed PNG, ICNS, and ICO
+assets are derived from that project-owned master; builds do not require image
+processing tools.
 
 ## Algorithms
 
@@ -145,9 +199,9 @@ same routes and costs.
 
 ## Build and Run
 
-Requirements are CMake 3.21 or newer and a C11 compiler such as Clang, GCC, or
-MSVC. CMake is the canonical build definition and supports a core-only build
-without GUI dependencies:
+Core and CLI requirements are CMake 3.21 or newer and a C11 compiler such as
+Clang, GCC, or MSVC. CMake is the canonical build definition and supports a
+core-only build without Qt or C++ dependencies:
 
 ```bash
 cmake --preset default
@@ -212,6 +266,19 @@ for generation 0 and each configured generation.
 `make sanitize` runs the same suite with AddressSanitizer and
 UndefinedBehaviorSanitizer.
 
+The optional desktop configuration also registers five C++ adapter tests that
+exercise C/C++ ownership, deterministic results, convergence history, and
+owned error handling:
+
+```bash
+cmake --preset desktop
+cmake --build --preset desktop
+ctest --preset desktop
+```
+
+GitHub Actions runs the core and Qt desktop configurations on macOS, Windows,
+and Linux using Qt 6.8.3.
+
 ## Complexity
 
 Let `n` be the selected city count, `P` the population size, `E` the elite
@@ -232,9 +299,10 @@ measurement.
 ## Project Background
 
 This project originated as university data structures and algorithms
-coursework. It was later revisited to improve algorithmic correctness,
-reproducibility, input safety, automated testing, and documentation while
-preserving its original C implementation and core algorithms.
+coursework. It was later rehabilitated for algorithmic correctness,
+reproducibility, input safety, automated testing, and documentation; then
+reorganized as a reusable C library and expanded with a C++/Qt desktop client.
+The original solver algorithms remain implemented in C.
 
 The adjacency matrix, lexicographic permutation search, recursive factorial,
 binary min-heap, elitism, swap mutation, and Make-based workflow remain central
@@ -249,5 +317,6 @@ to the project.
   refinements such as 2-opt.
 - Input uses the project's fixed 380-value, 20-city directed graph format
   rather than a general TSP file format.
-- The implementation uses fixed arrays and is single-threaded, consistent with
-  its data-structures coursework scope.
+- The core solver implementation uses fixed arrays and remains single-threaded.
+  The desktop application runs one solver workflow at a time on a background
+  worker thread.
