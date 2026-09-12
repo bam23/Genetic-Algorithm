@@ -277,7 +277,7 @@ ctest --preset desktop
 ```
 
 GitHub Actions runs the core and Qt desktop configurations on macOS, Windows,
-and Linux using Qt 6.8.3.
+and Linux using Qt 6.9.2.
 
 ## Complexity
 
